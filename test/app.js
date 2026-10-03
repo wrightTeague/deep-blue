@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.3"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.4"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -184,6 +184,12 @@
   }
   // The game played just before g on the same day of the same tournament (games come back in play
   // order). Resting carries over from it, so the first line of a game knows who just came off.
+  // Every game played earlier the same day in the same tournament, in order.
+  function dayGamesBefore(g) {
+    if (!g) return [];
+    const i = S.games.findIndex(x => x.id === g.id);
+    return S.games.slice(0, Math.max(i, 0)).filter(p => (p.tournament_id || null) === (g.tournament_id || null) && (p.game_date || null) === (g.game_date || null));
+  }
   function prevGameOf(g) {
     if (!g) return null;
     const i = S.games.findIndex(x => x.id === g.id), p = i > 0 ? S.games[i - 1] : null;
@@ -599,7 +605,7 @@
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules">
           <li>2 captains or president per line, whoever has rested longest</li>
-          <li>3 women and 4 men (asks first if men fall behind)</li>
+          <li>3 women and 4 men (asks first if the men fall a point behind over the day)</li>
           <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set${tourOf(g) ? " for this tournament" : ""}.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back, people out are skipped</li>
           <li>${ui.owner ? "Using your private settings (rookies and pairs)" : "Private settings are locked on this device, so rookies and pairs aren't used"}</li>
@@ -610,7 +616,7 @@
     } else if (s.type === "ratio") {
       title = "Men are sitting longer";
       body = `<div class="form">
-        <p style="margin:0">Going into <b>Line ${s.lineNo}</b>, men have played ${s.m.toFixed(1)} lines on average and women ${s.w.toFixed(1)}.</p>
+        <p style="margin:0">So far today, not counting captains and president, men have played <b>${s.m.toFixed(1)} points</b> on average and women <b>${s.w.toFixed(1)}</b>.</p>
         <p style="margin:0">Make Line ${s.lineNo} <b>5 men / 2 women</b> to catch up?</p>
         <div class="row"><button class="btn primary" data-act="ratio-five">Yes, 5 men / 2 women</button><button class="btn" data-act="ratio-keep">Keep 4 men / 3 women</button></div>
       </div>`;
@@ -654,9 +660,9 @@
     }
     if (!targets.length) { toast("Nothing to fill: every line is full or already played."); return; }
     const o = ui.owner || { rookies: [], apart: [], together: [] };
-    const notes = [];
+    const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id));
     for (const i of targets) {
-      const mb = DBLines.menBehind({ players: S.players, lines, idx: i, prevLines });
+      const mb = DBLines.menBehind({ players: S.players, lines, idx: i, dayLines });
       const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({

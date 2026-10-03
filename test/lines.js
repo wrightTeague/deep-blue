@@ -149,14 +149,20 @@
     return { lineup: line.slice(0, SLOTS), notes, tired: tiredOn };
   }
 
-  // Are the men falling behind the women? Compares average lines played this game by
-  // non-leaders; half a line behind is enough to offer a 5 men / 2 women line.
-  // Returns { behind, w, m } where w and m are the average lines played.
+  // Are the men falling behind the women over the whole day? With 4 of the 6 leaders being
+  // men, 3:4 lines give non-leader women a bit more time than non-leader men, and it adds up
+  // across games. Compares average points played by non-leaders today: earlier games that
+  // day (o.dayLines, a list of each game's lines; only points with a result count) plus this
+  // game's lines before idx (as planned). A point or more behind → offer a 5:2 line.
+  // Returns { behind, w, m } with w and m the average points played today.
+  const GAP = 1;
   function menBehind(o) {
-    const rest = restBefore(o.lines, o.idx, o.prevLines);
-    const avg = g => { const ps = o.players.filter(p => p.active !== false && !isLeader(p) && p.gender === g); return ps.length ? ps.reduce((a, p) => a + rest.info(p.id).played, 0) / ps.length : 0; };
-    const w = avg("W"), m = avg("M");
-    return { behind: o.idx > 0 && w - m >= 0.5, w, m };
+    const pts = new Map(), add = (lu, n) => (lu || []).forEach(s => pts.set(s.p, (pts.get(s.p) || 0) + n));
+    (o.dayLines || []).forEach(game => (game || []).forEach(l => add(l.lineup, resultsOf(l))));
+    for (let i = 0; i < o.idx; i++) add(o.lines[i].lineup, playsOf(o.lines[i]));
+    const avg = g => { const ps = o.players.filter(p => p.active !== false && !isLeader(p) && p.gender === g); return ps.length ? ps.reduce((a, p) => a + (pts.get(p.id) || 0), 0) / ps.length : 0; };
+    const w = avg("W"), m = avg("M"), gap = o.gap == null ? GAP : o.gap;
+    return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
   const api = { restBefore, planLine, menBehind, playsOf, toPairs, SLOTS };

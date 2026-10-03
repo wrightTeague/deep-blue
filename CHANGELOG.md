@@ -9,7 +9,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 - **The line maker uses them:** every line gets at least 2 handlers, a deep deep and a short deep (two different people). It goes to the "if needed" list only when nobody on the main list fits.
 - **Zone spots moved to the Roster tab** and are set once per tournament instead of per game. The Zone tab is gone. A game outside a tournament still has its own.
 - **Automatic line maker.** In the game menu (⋯), "Fill lines" plans new lines and fills empty spots in lines that haven't been played. "Suggest players for the empty spots" in a line's menu does one line. Each line gets 2 captains or president (whoever has rested longest), 3 women and 4 men, a deep deep, and nobody back to back. Everyone else goes by who has sat the most lines and played the fewest, carrying over from the last game that day. Players you placed stay put, lines with results are never touched, and there's an Undo.
-- **5 men / 2 women popup.** If the men fall half a line behind the women, the line maker asks before making a 5:2 line.
+- **5 men / 2 women popup.** Since 4 of the 6 captains and president are men, 3:4 lines give the other women a little more time than the other men, and it adds up over a day. The line maker tracks that across every game that day, and once the men (not counting captains and president) are a point behind, it asks before making a 5:2 line. On a normal day that's about twice.
 
 **Real board**
 - **Sitting time carries over between games.** The first line of a game counts from where people left off in the previous game that day (same tournament), using only points that got a result.
