@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.03.3"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.03.4"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -40,6 +40,7 @@
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
   ui.undo = null;                      // { id, lineup } for the last paste
+  ui.pickSort = store.get("pickSort", "rest"); // player picker order for lines: "rest" (sat longest first) or "az"
 
   const P = id => S.players.find(p => p.id === id);
   const label = p => p ? (p.nick || p.name) : "?";
@@ -176,6 +177,13 @@
     lines.forEach(pt => (pt.lineup || []).forEach(s => m.set(s.p, (m.get(s.p) || 0) + playsOf(pt))));
     return m;
   }
+  // Points each player has sat going into line idx: the points played by the lines since the
+  // last line they were on. sat(id) is null when they haven't been on a line yet this game.
+  function restBefore(lines, idx) {
+    const lastEnd = new Map(); let elapsed = 0;
+    for (let i = 0; i < idx; i++) { elapsed += playsOf(lines[i]); (lines[i].lineup || []).forEach(s => lastEnd.set(s.p, elapsed)); }
+    return { elapsed, sat: id => lastEnd.has(id) ? elapsed - lastEnd.get(id) : null };
+  }
 
   // ---------- render: shell ----------
   const TABS = [["points", "Points"], ["zone", "Zone"], ["stats", "Stats"], ["roster", "Roster"]];
@@ -222,7 +230,7 @@
     const g = game(); if (!g) return noGame();
     const lines = gamePoints(g.id), st = computeStats(lines).team;
     let next = 1;
-    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from); }).join("");
+    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restBefore(lines, i)); }).join("");
     return `
       <div class="game-head">
         <div>${tourOf(g) ? `<p class="eyebrow">${esc(tourOf(g).name)}${g.game_date ? " · " + fmtDate(g.game_date) : ""}</p>` : ""}<h2 class="sec">${esc(g.name)}</h2></div>
@@ -248,7 +256,7 @@
     </div>`;
   }
 
-  function lineCard(pt, i, from) {
+  function lineCard(pt, i, from, rest) {
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
     const goals = new Map(), assists = new Map();
@@ -260,9 +268,11 @@
         const p = P(s.p), r = s.r === "P" ? "C" : (s.r || "");
         const gN = goals.get(s.p) || 0, aN = assists.get(s.p) || 0;
         const ball = (gN || aN) ? `<span class="ball">${[gN ? (gN > 1 ? gN + " " : "") + "G" : "", aN ? (aN > 1 ? aN + " " : "") + "A" : ""].filter(Boolean).join(" · ")}</span>` : "";
+        const sat = rest && rest.elapsed ? rest.sat(s.p) : undefined;
+        const restTag = sat === undefined ? "" : sat === null ? `<span class="rest">1st shift</span>` : sat === 0 ? `<span class="rest b2b">back to back</span>` : `<span class="rest">sat ${sat}</span>`;
         slots.push(`<li class="slot">
           <button class="role" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button>
-          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${ball}</button>
+          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${ball}${restTag}</button>
         </li>`);
       } else {
         slots.push(`<li class="slot"><span class="role" aria-hidden="true"></span><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`);
@@ -459,12 +469,21 @@
       if (s.pointId) { const pt = S.points.find(x => x.id === s.pointId); (pt?.lineup || []).forEach(x => taken.add(x.p)); }
       if (s.zone) taken = new Set((g?.zone?.[s.zone]) || []);
       const q = (s.q || "").toLowerCase(), f = s.f || "";
-      const list = sortPlayers(activePlayers()).filter(p => (!f || p.gender === f) && (!q || p.name.toLowerCase().includes(q) || (p.nick || "").toLowerCase().includes(q)));
-      const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${taken.has(p.id) ? "on it" : (planned.get(p.id) || 0) + " pts planned"}</span></button></li>`;
+      // Picking for a line (not a zone) after the first one: show how long each person has sat.
+      const lineIdx = s.pointId && !s.zone ? pts.findIndex(x => x.id === s.pointId) : -1;
+      const rest = lineIdx > 0 ? restBefore(pts, lineIdx) : null;
+      const byRest = !!rest && ui.pickSort !== "az";
+      const satKey = p => { const v = rest.sat(p.id); return v === null ? Infinity : v; };
+      let list = sortPlayers(activePlayers()).filter(p => (!f || p.gender === f) && (!q || p.name.toLowerCase().includes(q) || (p.nick || "").toLowerCase().includes(q)));
+      if (byRest) list = list.sort((a, b) => satKey(b) - satKey(a));
+      const restText = p => { if (!rest) return ""; const v = rest.sat(p.id); return v === null ? `<b class="rest first">not in yet</b>` : v === 0 ? `<span class="rest b2b">just played</span>` : `sat ${v}`; };
+      const meta = p => taken.has(p.id) ? "on it" : [restText(p), (planned.get(p.id) || 0) + (rest ? " planned" : " pts planned")].filter(Boolean).join(" · ");
+      const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
       title = s.zone ? "Add to " + (ZONES.find(z => z[0] === s.zone) || [0, ""])[1] : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
       tools = `<input class="line-in" id="pickQ" placeholder="Search" value="${esc(s.q || "")}" autofocus autocomplete="off">
-        <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>`;
+        <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>
+        ${rest ? `<div class="seg" role="group" aria-label="Sort"><button data-act="pick-sort" data-v="rest" aria-pressed="${byRest}">Sat longest</button><button data-act="pick-sort" data-v="az" aria-pressed="${!byRest}">A–Z</button></div>` : ""}`;
       body = `${s.current ? `<div class="row" style="padding:2px 8px 8px"><button class="btn sm danger" data-act="pick-remove">Take ${esc(label(P(s.current)))} off this line</button></div>` : ""}
         <ul class="pick-list">${sec("W", "Women-matching")}${sec("M", "Men-matching")}${sec("", "Matchup not set")}</ul>
         ${list.length ? "" : '<p class="empty-note" style="padding:8px">Nobody matches.</p>'}`;
@@ -630,6 +649,7 @@
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
+    if (a === "pick-sort") { ui.pickSort = el.dataset.v; store.set("pickSort", ui.pickSort); renderSheet(); return; }
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
       if (s.zone) { const z = s.zone; patchGame(g => { g.zone = g.zone || {}; g.zone[z] = [...(g.zone[z] || []), pid]; }); renderSheet(); return; }

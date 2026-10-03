@@ -96,6 +96,10 @@ input.line-in:focus{outline:none;border-bottom-color:var(--blue)}
 .who.empty{background:transparent;border-bottom:2px dashed var(--faint);border-radius:0;color:var(--faint)}
 .who.empty:hover{color:var(--blue);border-bottom-color:var(--blue)}
 .ball{font-size:12px;font-family:var(--hand);font-weight:700;color:var(--green);white-space:nowrap}
+/* Points sat since this player's last line ("sat 4", "1st shift", "back to back") */
+.rest{font-size:13px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:400}
+.rest.first{color:var(--blue);font-weight:700}
+.rest.b2b{color:var(--rH);font-weight:700}
 .point-foot{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:8px}
 .scorers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .scorers label{display:flex;flex-direction:column;font-size:13px;color:var(--muted)}
