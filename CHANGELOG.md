@@ -1,6 +1,6 @@
 # Deep Blue Board changelog
 
-What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
+What changed, in plain words, newest first. Private settings are left out on purpose. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
 ## Oct 3, 2026 (evening)
 
@@ -8,10 +8,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 - **Zone spots are Handlers, Deep deep and Short deep** (no more Cup, since anyone can play it), shown below the roster. Each has a main list and a "can play it if needed" list.
 - **The line maker uses them:** every line gets at least 2 handlers, a deep deep and a short deep (two different people). It goes to the "if needed" list only when nobody on the main list fits.
 - **Zone spots moved to the Roster tab** and are set once per tournament instead of per game. The Zone tab is gone. A game outside a tournament still has its own.
-- **Keep apart / keep together take a list.** Pick one person, then everyone they should stay away from (or go with), instead of adding pairs one at a time.
 - **Automatic line maker.** In the game menu (⋯), "Fill lines" plans new lines and fills empty spots in lines that haven't been played. "Suggest players for the empty spots" in a line's menu does one line. Each line gets 2 captains or president (whoever has rested longest), 3 women and 4 men, a deep deep, and nobody back to back. Everyone else goes by who has sat the most lines and played the fewest, carrying over from the last game that day. Players you placed stay put, lines with results are never touched, and there's an Undo.
 - **5 men / 2 women popup.** If the men fall half a line behind the women, the line maker asks before making a 5:2 line.
-- **Private settings** (Roster tab, needs a separate private code): mark rookies so they're spread across lines, and set who to keep apart or together. Only devices with the private code can see these.
 
 **Real board**
 - **Sitting time carries over between games.** The first line of a game counts from where people left off in the previous game that day (same tournament), using only points that got a result.
