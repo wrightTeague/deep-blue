@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 3, 2026 (evening)
 
 **Test board**
+- **Its own home-screen icon** (yellow with TEST) and the name "DB Test", so it's easy to tell apart from the real board on a phone.
 - **Zone spots are Handlers, Deep deep and Short deep** (no more Cup, since anyone can play it), shown below the roster. Each has a main list and a "can play it if needed" list.
 - **The line maker uses them:** every line gets at least 2 handlers, a deep deep and a short deep (two different people). It goes to the "if needed" list only when nobody on the main list fits.
 - **Zone spots moved to the Roster tab** and are set once per tournament instead of per game. The Zone tab is gone. A game outside a tournament still has its own.
