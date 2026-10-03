@@ -2,7 +2,7 @@
 
 Point-by-point line planner and stat tracker for Deep Blue Ultimate (F&M club ultimate).
 
-- **Lines:** plan as many lines ahead as you want, 7 players each, with Handle / Cut roles. Each line plays 2 points by default (Line 1 = points 1–2, Line 2 = points 3–4…), adjustable per line, with a result, goal and assist for each point. Each player on a line shows how many points they sat since their last line ("sat 4", "1st shift", "back to back"), and the player picker lists whoever has sat longest first (or A–Z).
+- **Lines:** plan as many lines ahead as you want, 7 players each, with Handle / Cut roles. Each line plays 2 points by default (Line 1 = points 1–2, Line 2 = points 3–4…), adjustable per line, with a result, goal and assist for each point. Each player on a line shows how many points they sat since their last line ("sat 4 pts", "1st shift", "back to back"), carrying over from the previous game that day. The player picker shows lines sat and lines played, and sorts by either (or A–Z).
 - **Points per person:** grouped bar chart under the lines (0 pts, 2 pts, 4 pts…), split W/M. Tap a bar (or hover on a laptop) to see who's in it.
 - **Tournaments:** games live in tournament folders (pick from the game menu at the top). "Next game" copies the current lines into a new game in the same tournament; Stats can show one game, the whole tournament, or everything.
 - **Copy / paste lines:** line menu → Copy players, then tap Paste on any line in any game (or Paste as new line). Undo reverts the last paste.
