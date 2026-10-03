@@ -1,6 +1,6 @@
 # Deep Blue Board changelog
 
-What changed, in plain words, newest first. Private settings are left out on purpose. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
+What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
 ## Oct 3, 2026 (evening)
 
