@@ -17,3 +17,7 @@ Everyone with the team link and passcode can edit at the same time; changes show
 Static site (`index.html`, `app.js`, `styles.css`) on GitHub Pages. Data is in a Supabase Postgres database. The tables are locked; the page only calls `app_*` database functions, and every one of them checks the team link token and the passcode before reading or writing. Live updates use a Supabase Realtime broadcast channel.
 
 `supabase.js` is the official supabase-js 2.117.2 browser build, bundled so the site has no other script dependencies.
+
+## Test board
+
+`test/` is a separate copy of the app for trying new features (right now: the automatic line maker and private settings). It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json` and loads `lines.js`, the line-making logic, which has no DOM code so it can be tested in Node. Private settings (rookies, keep-apart and keep-together pairs) live in the `owner_settings` table and are only returned by `app_owner_load` / `app_owner_save` with a second, private code.
