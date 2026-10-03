@@ -229,3 +229,14 @@ body:has(.clipbar) main{padding-bottom:calc(var(--nav-h) + 110px + env(safe-area
 @media (min-width:760px){ body:has(.clipbar) main{padding-bottom:100px} }
 body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-bottom,0px))}
 @media (min-width:760px){ body:has(.clipbar) .toast{bottom:90px} }
+
+/* ---------- goal / assist tap-to-pick ---------- */
+.ga-pick{display:flex;flex-direction:column;gap:6px;background:#f3f8f4;border-radius:6px;padding:8px}
+.ga-q{font-size:15px;color:var(--ink)}
+.ga-opts{display:flex;flex-wrap:wrap;gap:6px}
+.ga-btn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 10px 4px 4px;min-height:36px;font-size:16px}
+.ga-btn:hover{border-color:var(--green)}
+.ga-btn .mag{width:22px;height:22px;font-size:11px}
+.ga-btn.ghost{padding-left:10px;color:var(--muted);border-style:dashed}
+.ga-done{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;color:var(--muted)}
+.ga-done b{color:var(--ink);font-weight:400}

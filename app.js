@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.03.2"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.03.3"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -166,7 +166,7 @@
       if (o.result === "us") { team.us++; if (o.start_on === "O") team.holds++; if (o.start_on === "D") team.breaks++; }
       else team.them++;
       (pt.lineup || []).forEach(s => { const r = row(s.p); r.pts++; if (o.start_on === "O") r.o++; else if (o.start_on === "D") r.d++; });
-      if (o.result === "us") { if (o.scorer) row(o.scorer).g++; if (o.assist) row(o.assist).a++; }
+      if (o.result === "us") { if (o.scorer) row(o.scorer).g++; if (o.assist && o.assist !== "none") row(o.assist).a++; }
     }));
     return { team, rows: [...rows.values()] };
   }
@@ -252,7 +252,7 @@
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
     const goals = new Map(), assists = new Map();
-    o.forEach(x => { if (x.result === "us") { if (x.scorer) goals.set(x.scorer, (goals.get(x.scorer) || 0) + 1); if (x.assist) assists.set(x.assist, (assists.get(x.assist) || 0) + 1); } });
+    o.forEach(x => { if (x.result === "us") { if (x.scorer) goals.set(x.scorer, (goals.get(x.scorer) || 0) + 1); if (x.assist && x.assist !== "none") assists.set(x.assist, (assists.get(x.assist) || 0) + 1); } });
     const slots = [];
     for (let k = 0; k < SLOTS; k++) {
       const s = line[k];
@@ -268,7 +268,14 @@
         slots.push(`<li class="slot"><span class="role" aria-hidden="true"></span><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`);
       }
     }
-    const opts = sel => `<option value="">—</option>` + line.map(s => `<option value="${s.p}" ${sel === s.p ? "selected" : ""}>${esc(label(P(s.p)))}</option>`).join("");
+    const pickRow = (k, act, prompt, exclude, extra) => `<div class="ga-pick"><span class="ga-q">${prompt}</span>
+      <div class="ga-opts">${line.filter(s => s.p !== exclude).map(s => { const p = P(s.p); return `<button class="ga-btn" data-act="${act}" data-id="${pt.id}" data-k="${k}" data-p="${s.p}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span>${esc(label(p))}</button>`; }).join("")}${extra || ""}</div></div>`;
+    const scorerUI = (x, k) => {
+      if (!x.scorer) return pickRow(k, "set-goal", "Who scored?", null, "");
+      if (!x.assist) return pickRow(k, "set-assist", `Goal: <b>${esc(label(P(x.scorer)))}</b>. Who threw it?`, x.scorer, `<button class="ga-btn ghost" data-act="set-assist" data-id="${pt.id}" data-k="${k}" data-p="none">No assist</button>`);
+      return `<div class="ga-done"><span>Goal <b>${esc(label(P(x.scorer)))}</b>${x.assist !== "none" ? ` · Assist <b>${esc(label(P(x.assist)))}</b>` : " · no assist"}</span>
+        <button class="btn sm ghost" data-act="ga-change" data-id="${pt.id}" data-k="${k}">Change</button></div>`;
+    };
     const rows = o.map((x, k) => {
       const tag = outcomeTag(x);
       return `<div class="pt-row">
@@ -284,10 +291,7 @@
           </div>
           ${tag ? `<span class="tag ${tag.cls}">${tag.text}</span>` : ""}
         </div>
-        ${x.result === "us" ? `<div class="scorers">
-          <label>Goal<select data-act="scorer" data-id="${pt.id}" data-k="${k}" id="sc-${pt.id}-${k}">${opts(x.scorer)}</select></label>
-          <label>Assist<select data-act="assist" data-id="${pt.id}" data-k="${k}" id="as-${pt.id}-${k}">${opts(x.assist)}</select></label>
-        </div>` : ""}
+        ${x.result === "us" ? (line.length ? scorerUI(x, k) : '<p class="muted" style="margin:0;font-size:14px">Add players to record the goal.</p>') : ""}
       </div>`;
     }).join("");
     const done = o.every(x => x.result);
@@ -552,10 +556,17 @@
     next.outcomes = outs(next).map(o => {
       if (o.result !== "us") { o.scorer = null; o.assist = null; }
       if (o.scorer && !ids.has(o.scorer)) o.scorer = null;
-      if (o.assist && !ids.has(o.assist)) o.assist = null;
+      if (o.assist && o.assist !== "none" && !ids.has(o.assist)) o.assist = null;
       return o;
     });
     savePoint(next);
+  }
+  // The point after point k of a line: the next slot in the same line, or the first point of the next line.
+  function nextPointAfter(lineId, k) {
+    const ln = S.points.find(x => x.id === lineId); if (!ln) return null;
+    if (k + 1 < playsOf(ln)) return { lineId, k: k + 1 };
+    const lines = gamePoints(ln.game_id), i = lines.findIndex(x => x.id === lineId);
+    return lines[i + 1] ? { lineId: lines[i + 1].id, k: 0 } : null;
   }
   function patchGame(fn) { const g = game(); if (!g) return; const next = JSON.parse(JSON.stringify(g)); fn(next); saveGame(next); }
 
@@ -599,7 +610,24 @@
     if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
     if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
     if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
-    if (a === "result") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.result = o.result === el.dataset.v ? "" : el.dataset.v; }); return; }
+    if (a === "result") {
+      const k = +el.dataset.k, cur = outs(S.points.find(x => x.id === id))[k], res = cur.result === el.dataset.v ? "" : el.dataset.v;
+      // Whoever gets scored on receives: they scored -> we start next point on O; we scored -> D.
+      const nextStart = res === "them" ? "O" : res === "us" ? "D" : "";
+      const nxt = nextPointAfter(id, k);
+      patchPoint(id, pt => {
+        pt.outcomes[k].result = res;
+        if (nextStart && nxt && nxt.lineId === id && !pt.outcomes[nxt.k].result) pt.outcomes[nxt.k].start_on = nextStart;
+      });
+      if (nextStart && nxt && nxt.lineId !== id) {
+        const no = outs(S.points.find(x => x.id === nxt.lineId))[nxt.k];
+        if (!no.result) patchPoint(nxt.lineId, pt => { pt.outcomes[nxt.k].start_on = nextStart; });
+      }
+      return;
+    }
+    if (a === "set-goal") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = v; if (o.assist === v) o.assist = null; }); return; }
+    if (a === "set-assist") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); return; }
+    if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
     if (a === "pick") {
@@ -671,8 +699,6 @@
     const el = e.target;
     if (el.id === "gameSel") { ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
-    if (a === "scorer") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = el.value || null; if (o.assist === o.scorer) o.assist = null; }); return; }
-    if (a === "assist") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.assist = el.value || null; if (o.scorer === o.assist) o.scorer = null; }); return; }
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
     if (a === "p-nick") { const p = P(id), v = el.value.trim(); if (v !== p.nick) savePlayer({ ...p, nick: v }); return; }
   });
