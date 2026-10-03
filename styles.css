@@ -214,3 +214,18 @@ table.stats td .pl{display:flex;align-items:center;gap:8px}
 
 .eyebrow{font-family:var(--hand);font-weight:700;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 2px}
 select.line-in{font-size:18px;color:var(--ink);padding:4px 2px}
+
+/* ---------- copy / paste lines ---------- */
+.clipbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 12px + env(safe-area-inset-bottom,0px));z-index:30;width:min(560px,calc(100% - 24px));background:var(--note);color:var(--ink);box-shadow:0 8px 18px rgba(25,35,55,.22);padding:8px 10px 8px 14px;display:flex;align-items:center;gap:10px}
+.clip-text{flex:1;min-width:0;font-size:15px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.clip-text b{font-family:var(--hand);font-weight:700;margin-right:4px}
+.clipbar .btn{background:rgba(255,255,255,.5)}
+@media (min-width:760px){ .clipbar{bottom:18px} }
+.add-wrap{display:flex;flex-direction:column;gap:12px}
+.add-wrap .add-point{min-height:120px}
+.add-point.paste{border-color:var(--blue);color:var(--blue);min-height:80px}
+.point-head .btn.sm{min-height:30px;padding:1px 10px}
+body:has(.clipbar) main{padding-bottom:calc(var(--nav-h) + 110px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){ body:has(.clipbar) main{padding-bottom:100px} }
+body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){ body:has(.clipbar) .toast{bottom:90px} }

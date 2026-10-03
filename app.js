@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.03.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.03.2"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -37,6 +37,9 @@
   let S = { team: null, tournaments: [], players: [], games: [], points: [] };
   const ui = { tab: store.get("tab", "points"), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
+  // Copied line players, kept on this device so they can be pasted into any game.
+  ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
+  ui.undo = null;                      // { id, lineup } for the last paste
 
   const P = id => S.players.find(p => p.id === id);
   const label = p => p ? (p.nick || p.name) : "?";
@@ -198,6 +201,7 @@
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
       </div></header>
       <main id="main">${ui.tab === "zone" ? renderZone() : ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
+      ${ui.clip && ui.tab === "points" ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
@@ -229,8 +233,19 @@
         <span class="row" style="gap:5px"><span class="role" data-r="C">C</span>Cut</span>
         <span>Tap a letter to change a role, a name to swap.</span>
       </div>
-      <div class="points">${cards}<button class="add-point" data-act="add-point">+ Add line</button></div>
+      <div class="points">${cards}<div class="add-wrap"><button class="add-point" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="add-point paste" data-act="paste-new">+ Paste as new line</button>' : ""}</div></div>
       ${pointsChart(lines)}`;
+  }
+
+  function clipBar() {
+    const names = ui.clip.lineup.map(x => label(P(x.p))).join(", ");
+    return `<div class="clipbar" role="status">
+      <span class="clip-text"><b>Copied ${esc(ui.clip.from)}</b> ${esc(names) || "(no players)"}</span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap">
+        ${ui.undo ? '<button class="btn sm" data-act="undo-paste">Undo</button>' : ""}
+        <button class="btn sm" data-act="clip-done">Done</button>
+      </span>
+    </div>`;
   }
 
   function lineCard(pt, i, from) {
@@ -280,6 +295,7 @@
       <div class="point-head">
         <h3>Line ${i + 1}</h3>
         <span class="tag">${n === 1 ? "Pt " + from : "Pts " + from + "–" + to}</span>
+        ${ui.clip ? `<button class="btn sm primary" data-act="paste-line" data-id="${pt.id}">Paste</button>` : ""}
         <button class="icon-btn" data-act="point-menu" data-id="${pt.id}" aria-label="Line ${i + 1} options">⋯</button>
       </div>
       <ul class="slots">${slots.join("")}</ul>
@@ -455,7 +471,8 @@
         <div class="row" style="padding:6px 12px 10px;gap:12px"><span>Plays</span>
           <div class="seg" role="group" aria-label="Points this line plays">${[1, 2, 3, 4].map(v => `<button data-act="pm-plays" data-v="${v}" aria-pressed="${cur === v}">${v}</button>`).join("")}</div>
           <span class="muted">point${cur === 1 ? "" : "s"}</span></div>
-        <button data-act="pm-dup">Copy this line to the end</button>
+        <button data-act="pm-copy">Copy players (to paste into other lines or games)</button>
+        <button data-act="pm-dup">Duplicate this line at the end</button>
         <button data-act="pm-insert">Insert a copy right after this line</button>
         ${i > 0 ? '<button data-act="pm-up">Move earlier</button>' : ""}
         ${i < pts.length - 1 ? '<button data-act="pm-down">Move later</button>' : ""}
@@ -593,6 +610,15 @@
     }
     if (a === "pick-remove") { const s = ui.sheet; patchPoint(s.pointId, pt => { pt.lineup = pt.lineup.filter(x => x.p !== s.current); }); closeSheet(); return; }
     if (a === "point-menu") { openSheet({ type: "point-menu", id }); return; }
+    if (a === "paste-line") {
+      const pt = S.points.find(x => x.id === id); if (!pt || !ui.clip) return;
+      ui.undo = { id, lineup: JSON.parse(JSON.stringify(pt.lineup || [])) };
+      patchPoint(id, x => { x.lineup = ui.clip.lineup.map(y => ({ ...y })).slice(0, SLOTS); });
+      toast("Pasted"); return;
+    }
+    if (a === "paste-new") { if (ui.clip) { newPointAfter({ lineup: ui.clip.lineup, plays: 2 }, false); ui.undo = null; toast("Added a pasted line"); } return; }
+    if (a === "undo-paste") { const u = ui.undo; if (u) { ui.undo = null; patchPoint(u.id, x => { x.lineup = u.lineup; }); toast("Paste undone"); } return; }
+    if (a === "clip-done") { ui.clip = null; ui.undo = null; store.del("clip"); render(); return; }
     if (a.startsWith("pm-")) {
       const pid = ui.sheet.id, pt = S.points.find(x => x.id === pid);
       if (a === "pm-delete") {
@@ -606,6 +632,11 @@
         return;
       }
       closeSheet();
+      if (a === "pm-copy") {
+        const lines = gamePoints(ui.gameId), n = lines.findIndex(x => x.id === pid) + 1, g = game();
+        ui.clip = { lineup: (pt.lineup || []).map(y => ({ p: y.p, r: y.r || "" })), from: "Line " + n + (g ? " · " + g.name : "") };
+        ui.undo = null; store.set("clip", ui.clip); render(); toast("Copied. Tap Paste on any line.");
+      }
       if (a === "pm-dup") newPointAfter(pt, false);
       if (a === "pm-insert") newPointAfter(pt, true);
       if (a === "pm-up") movePoint(pid, -1);
