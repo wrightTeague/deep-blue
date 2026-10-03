@@ -136,27 +136,36 @@
   }
 
   // ---------- derived ----------
-  function outcome(pt) {
-    if (!pt.result) return null;
-    if (pt.result === "us") return pt.start_on === "D" ? { cls: "break", text: "Break" } : pt.start_on === "O" ? { cls: "hold", text: "Hold" } : { cls: "hold", text: "Scored" };
-    return pt.start_on === "O" ? { cls: "lost", text: "Broken" } : { cls: "lost", text: "They scored" };
+  const playsOf = pt => Math.max(1, Math.min(4, +pt.plays || 2));
+  // One entry per point this line plays: { start_on, result, scorer, assist }
+  function outs(pt) {
+    const n = playsOf(pt), o = Array.isArray(pt.outcomes) ? pt.outcomes : [];
+    return Array.from({ length: n }, (_, k) => ({ start_on: "", result: "", scorer: null, assist: null, ...(o[k] || {}) }));
   }
-  function computeStats(points) {
+  function outcomeTag(o) {
+    if (!o.result) return null;
+    if (o.result === "us") return o.start_on === "D" ? { cls: "break", text: "Break" } : o.start_on === "O" ? { cls: "hold", text: "Hold" } : { cls: "hold", text: "Scored" };
+    return o.start_on === "O" ? { cls: "lost", text: "Broken" } : { cls: "lost", text: "They scored" };
+  }
+  function computeStats(lines) {
     const rows = new Map(), team = { us: 0, them: 0, holds: 0, breaks: 0, oPts: 0, dPts: 0, played: 0 };
-    const row = id => { if (!rows.has(id)) rows.set(id, { id, pts: 0, o: 0, d: 0, g: 0, a: 0, plus: 0 }); return rows.get(id); };
-    points.forEach(pt => {
-      if (!pt.result) return;
+    const row = id => { if (!rows.has(id)) rows.set(id, { id, pts: 0, o: 0, d: 0, g: 0, a: 0 }); return rows.get(id); };
+    lines.forEach(pt => outs(pt).forEach(o => {
+      if (!o.result) return;
       team.played++;
-      if (pt.start_on === "O") team.oPts++; else if (pt.start_on === "D") team.dPts++;
-      if (pt.result === "us") { team.us++; if (pt.start_on === "O") team.holds++; if (pt.start_on === "D") team.breaks++; }
+      if (o.start_on === "O") team.oPts++; else if (o.start_on === "D") team.dPts++;
+      if (o.result === "us") { team.us++; if (o.start_on === "O") team.holds++; if (o.start_on === "D") team.breaks++; }
       else team.them++;
-      (pt.lineup || []).forEach(s => {
-        const r = row(s.p); r.pts++;
-        if (pt.start_on === "O") r.o++; else if (pt.start_on === "D") r.d++;
-      });
-      if (pt.result === "us") { if (pt.scorer) row(pt.scorer).g++; if (pt.assist) row(pt.assist).a++; }
-    });
+      (pt.lineup || []).forEach(s => { const r = row(s.p); r.pts++; if (o.start_on === "O") r.o++; else if (o.start_on === "D") r.d++; });
+      if (o.result === "us") { if (o.scorer) row(o.scorer).g++; if (o.assist) row(o.assist).a++; }
+    }));
     return { team, rows: [...rows.values()] };
+  }
+  // Planned points per player for a game: every line they're on counts for the points it plays.
+  function plannedPoints(lines) {
+    const m = new Map();
+    lines.forEach(pt => (pt.lineup || []).forEach(s => m.set(s.p, (m.get(s.p) || 0) + playsOf(pt))));
+    return m;
   }
 
   // ---------- render: shell ----------
@@ -192,14 +201,15 @@
   }
 
   function noGame() {
-    return `<h2 class="sec">No game yet</h2><p class="empty-note">Make a game to start planning points.</p><button class="btn primary" data-act="new-game">New game</button>`;
+    return `<h2 class="sec">No game yet</h2><p class="empty-note">Make a game to start planning lines.</p><button class="btn primary" data-act="new-game">New game</button>`;
   }
 
   // ---------- render: points ----------
   function renderPoints() {
     const g = game(); if (!g) return noGame();
-    const pts = gamePoints(g.id), st = computeStats(pts).team;
-    const cards = pts.map((pt, i) => pointCard(pt, i)).join("");
+    const lines = gamePoints(g.id), st = computeStats(lines).team;
+    let next = 1;
+    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from); }).join("");
     return `
       <div class="game-head">
         <div><h2 class="sec">${esc(g.name)}</h2></div>
@@ -210,18 +220,22 @@
         <span class="row" style="gap:5px"><span class="role" data-r="C">C</span>Cut</span>
         <span>Tap a letter to change a role, a name to swap.</span>
       </div>
-      <div class="points">${cards}<button class="add-point" data-act="add-point">+ Add point</button></div>`;
+      <div class="points">${cards}<button class="add-point" data-act="add-point">+ Add line</button></div>
+      ${pointsChart(lines)}`;
   }
 
-  function pointCard(pt, i) {
-    const line = pt.lineup || [], oc = outcome(pt);
+  function lineCard(pt, i, from) {
+    const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
+    const goals = new Map(), assists = new Map();
+    o.forEach(x => { if (x.result === "us") { if (x.scorer) goals.set(x.scorer, (goals.get(x.scorer) || 0) + 1); if (x.assist) assists.set(x.assist, (assists.get(x.assist) || 0) + 1); } });
     const slots = [];
     for (let k = 0; k < SLOTS; k++) {
       const s = line[k];
       if (s) {
         const p = P(s.p), r = s.r === "P" ? "C" : (s.r || "");
-        const ball = pt.result === "us" ? (pt.scorer === s.p ? '<span class="ball">Goal</span>' : pt.assist === s.p ? '<span class="ball">Assist</span>' : "") : "";
+        const gN = goals.get(s.p) || 0, aN = assists.get(s.p) || 0;
+        const ball = (gN || aN) ? `<span class="ball">${[gN ? (gN > 1 ? gN + " " : "") + "G" : "", aN ? (aN > 1 ? aN + " " : "") + "A" : ""].filter(Boolean).join(" · ")}</span>` : "";
         slots.push(`<li class="slot">
           <button class="role" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button>
           <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}</span>${ball}</button>
@@ -231,31 +245,69 @@
       }
     }
     const opts = sel => `<option value="">—</option>` + line.map(s => `<option value="${s.p}" ${sel === s.p ? "selected" : ""}>${esc(label(P(s.p)))}</option>`).join("");
-    return `<article class="point ${pt.result ? "done " + pt.result : ""}">
-      <div class="point-head">
-        <h3>Point ${i + 1}</h3>
-        ${oc ? `<span class="tag ${oc.cls}">${oc.text}</span>` : ""}
-        <div class="seg" role="group" aria-label="Start on offense or defense">
-          <button data-act="od" data-id="${pt.id}" data-v="O" aria-pressed="${pt.start_on === "O"}">O</button>
-          <button data-act="od" data-id="${pt.id}" data-v="D" aria-pressed="${pt.start_on === "D"}">D</button>
+    const rows = o.map((x, k) => {
+      const tag = outcomeTag(x);
+      return `<div class="pt-row">
+        <div class="pt-line">
+          <span class="pt-n">Pt ${from + k}</span>
+          <div class="seg" role="group" aria-label="Point ${from + k}: start on offense or defense">
+            <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="O" aria-pressed="${x.start_on === "O"}">O</button>
+            <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="D" aria-pressed="${x.start_on === "D"}">D</button>
+          </div>
+          <div class="seg" role="group" aria-label="Point ${from + k}: result">
+            <button class="us" data-act="result" data-id="${pt.id}" data-k="${k}" data-v="us" aria-pressed="${x.result === "us"}">We scored</button>
+            <button class="them" data-act="result" data-id="${pt.id}" data-k="${k}" data-v="them" aria-pressed="${x.result === "them"}">They did</button>
+          </div>
+          ${tag ? `<span class="tag ${tag.cls}">${tag.text}</span>` : ""}
         </div>
-        <button class="icon-btn" data-act="point-menu" data-id="${pt.id}" aria-label="Point ${i + 1} options">⋯</button>
+        ${x.result === "us" ? `<div class="scorers">
+          <label>Goal<select data-act="scorer" data-id="${pt.id}" data-k="${k}" id="sc-${pt.id}-${k}">${opts(x.scorer)}</select></label>
+          <label>Assist<select data-act="assist" data-id="${pt.id}" data-k="${k}" id="as-${pt.id}-${k}">${opts(x.assist)}</select></label>
+        </div>` : ""}
+      </div>`;
+    }).join("");
+    const done = o.every(x => x.result);
+    return `<article class="point ${done ? "done" : ""}">
+      <div class="point-head">
+        <h3>Line ${i + 1}</h3>
+        <span class="tag">${n === 1 ? "Pt " + from : "Pts " + from + "–" + to}</span>
+        <button class="icon-btn" data-act="point-menu" data-id="${pt.id}" aria-label="Line ${i + 1} options">⋯</button>
       </div>
       <ul class="slots">${slots.join("")}</ul>
       <div class="point-foot">
-        <div class="row" style="justify-content:space-between">
-          <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span></span>
-          <div class="seg" role="group" aria-label="Result">
-            <button class="us" data-act="result" data-id="${pt.id}" data-v="us" aria-pressed="${pt.result === "us"}">We scored</button>
-            <button class="them" data-act="result" data-id="${pt.id}" data-v="them" aria-pressed="${pt.result === "them"}">They did</button>
-          </div>
-        </div>
-        ${pt.result === "us" ? `<div class="scorers">
-          <label>Goal<select data-act="scorer" data-id="${pt.id}" id="sc-${pt.id}">${opts(pt.scorer)}</select></label>
-          <label>Assist<select data-act="assist" data-id="${pt.id}" id="as-${pt.id}">${opts(pt.assist)}</select></label>
-        </div>` : ""}
+        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span></span>
+        ${rows}
       </div>
     </article>`;
+  }
+
+  // Horizontal bar chart: planned points per player for this game.
+  function pointsChart(lines) {
+    const planned = plannedPoints(lines);
+    const on = sortPlayers(activePlayers()).filter(p => planned.get(p.id)).sort((a, b) => planned.get(b.id) - planned.get(a.id) || label(a).localeCompare(label(b)));
+    const off = sortPlayers(activePlayers()).filter(p => !planned.get(p.id));
+    if (!on.length) return "";
+    const max = Math.max(...on.map(p => planned.get(p.id)));
+    const step = max > 14 ? 4 : max > 7 ? 2 : 1;
+    const ticks = []; for (let t = 0; t <= max; t += step) ticks.push(t);
+    const pct = v => (v / max) * 100;
+    const bars = on.map(p => { const v = planned.get(p.id); return `<div class="bar-row" title="${esc(label(p))}: ${v} point${v === 1 ? "" : "s"}">
+        <span class="bl">${esc(label(p))}</span>
+        <span class="track"><span class="fill ${p.gender || "U"}" style="width:${pct(v)}%"></span></span>
+        <span class="bv">${v}</span></div>`; }).join("");
+    const grid = ticks.map(t => `<i style="left:${pct(t)}%"></i>`).join("");
+    const axis = ticks.map(t => `<span style="left:${pct(t)}%">${t}</span>`).join("");
+    return `<section class="ppl">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <h2 class="sec">Points per person</h2>
+        <span class="legend"><span class="row" style="gap:5px"><span class="key W"></span>W</span><span class="row" style="gap:5px"><span class="key M"></span>M</span></span>
+      </div>
+      <p class="muted" style="margin:8px 0 12px;font-size:15px">Planned for this game. Each line counts for the points it plays.</p>
+      <div class="bars"><div class="gridlines">${grid}</div>${bars}
+        <div class="bar-row axis"><span class="bl"></span><span class="track ticks">${axis}</span><span class="bv"></span></div>
+      </div>
+      ${off.length ? `<p class="muted" style="margin:12px 0 0;font-size:15px">Not on any line yet: ${off.map(p => esc(label(p))).join(", ")}</p>` : ""}
+    </section>`;
   }
 
   // ---------- render: zone ----------
@@ -367,20 +419,23 @@
       title = s.zone ? "Add to " + (ZONES.find(z => z[0] === s.zone) || [0, ""])[1] : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
       tools = `<input class="line-in" id="pickQ" placeholder="Search" value="${esc(s.q || "")}" autofocus autocomplete="off">
         <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>`;
-      body = `${s.current ? `<div class="row" style="padding:2px 8px 8px"><button class="btn sm danger" data-act="pick-remove">Take ${esc(label(P(s.current)))} off this point</button></div>` : ""}
+      body = `${s.current ? `<div class="row" style="padding:2px 8px 8px"><button class="btn sm danger" data-act="pick-remove">Take ${esc(label(P(s.current)))} off this line</button></div>` : ""}
         <ul class="pick-list">${sec("W", "Women-matching")}${sec("M", "Men-matching")}${sec("", "Matchup not set")}</ul>
         ${list.length ? "" : '<p class="empty-note" style="padding:8px">Nobody matches.</p>'}`;
     } else if (s.type === "point-menu") {
-      const pts = gamePoints(ui.gameId), i = pts.findIndex(x => x.id === s.id);
-      title = "Point " + (i + 1);
+      const pts = gamePoints(ui.gameId), i = pts.findIndex(x => x.id === s.id), cur = pts[i] ? playsOf(pts[i]) : 2;
+      title = "Line " + (i + 1);
       body = `<div class="menu-list">
-        <button data-act="pm-dup">Copy this lineup to a new point at the end</button>
-        <button data-act="pm-insert">Insert a copy right after this point</button>
+        <div class="row" style="padding:6px 12px 10px;gap:12px"><span>Plays</span>
+          <div class="seg" role="group" aria-label="Points this line plays">${[1, 2, 3, 4].map(v => `<button data-act="pm-plays" data-v="${v}" aria-pressed="${cur === v}">${v}</button>`).join("")}</div>
+          <span class="muted">point${cur === 1 ? "" : "s"}</span></div>
+        <button data-act="pm-dup">Copy this line to the end</button>
+        <button data-act="pm-insert">Insert a copy right after this line</button>
         ${i > 0 ? '<button data-act="pm-up">Move earlier</button>' : ""}
         ${i < pts.length - 1 ? '<button data-act="pm-down">Move later</button>' : ""}
-        <button data-act="pm-clear-result">Clear result</button>
+        <button data-act="pm-clear-result">Clear results</button>
         <button data-act="pm-clear">Clear players</button>
-        <button class="danger" data-act="pm-delete">${s.confirm ? "Tap again to delete Point " + (i + 1) : "Delete point"}</button>
+        <button class="danger" data-act="pm-delete">${s.confirm ? "Tap again to delete Line " + (i + 1) : "Delete line"}</button>
       </div>`;
     } else if (s.type === "game-menu") {
       const g = game();
@@ -388,8 +443,8 @@
       body = `<div class="menu-list">
         <button data-act="new-game">New game</button>
         ${g ? `<button data-act="edit-game">Rename or change date</button>
-        <button data-act="copy-game">New game copying this point plan</button>
-        <button class="danger" data-act="delete-game">${s.confirm ? "Tap again to delete " + esc(g.name) + " and its points" : "Delete game"}</button>` : ""}
+        <button data-act="copy-game">New game copying these lines</button>
+        <button class="danger" data-act="delete-game">${s.confirm ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete game"}</button>` : ""}
       </div>`;
     } else if (s.type === "game-form") {
       const g = s.id ? S.games.find(x => x.id === s.id) : null;
@@ -411,7 +466,7 @@
     const g = game(); if (!g) return;
     const pts = gamePoints(g.id);
     const lineup = srcPt ? (srcPt.lineup || []).map(x => ({ ...x })) : [];
-    const pt = { id: uid(), game_id: g.id, pos: 0, lineup, start_on: "", result: "", scorer: null, assist: null, note: "" };
+    const pt = { id: uid(), game_id: g.id, pos: 0, lineup, plays: srcPt ? playsOf(srcPt) : 2, outcomes: [], note: "" };
     let order = pts.map(x => x.id);
     if (insertAfter) { const i = order.indexOf(srcPt.id); order.splice(i + 1, 0, pt.id); } else order.push(pt.id);
     pt.pos = order.indexOf(pt.id) + 1;
@@ -428,11 +483,16 @@
   }
   function patchPoint(id, fn) {
     const pt = S.points.find(x => x.id === id); if (!pt) return;
-    const next = JSON.parse(JSON.stringify(pt)); fn(next);
-    if (next.result !== "us") { next.scorer = null; next.assist = null; }
+    const next = JSON.parse(JSON.stringify(pt));
+    next.outcomes = outs(next); fn(next);
+    next.plays = playsOf(next);
     const ids = new Set((next.lineup || []).map(x => x.p));
-    if (next.scorer && !ids.has(next.scorer)) next.scorer = null;
-    if (next.assist && !ids.has(next.assist)) next.assist = null;
+    next.outcomes = outs(next).map(o => {
+      if (o.result !== "us") { o.scorer = null; o.assist = null; }
+      if (o.scorer && !ids.has(o.scorer)) o.scorer = null;
+      if (o.assist && !ids.has(o.assist)) o.assist = null;
+      return o;
+    });
     savePoint(next);
   }
   function patchGame(fn) { const g = game(); if (!g) return; const next = JSON.parse(JSON.stringify(g)); fn(next); saveGame(next); }
@@ -443,7 +503,7 @@
     const ok = await saveGame(g);
     if (ok && copyFrom) {
       for (const [i, pt] of gamePoints(copyFrom.id).entries()) {
-        await savePoint({ id: uid(), game_id: g.id, pos: i + 1, lineup: (pt.lineup || []).map(x => ({ ...x })), start_on: "", result: "", scorer: null, assist: null, note: "" });
+        await savePoint({ id: uid(), game_id: g.id, pos: i + 1, lineup: (pt.lineup || []).map(x => ({ ...x })), plays: playsOf(pt), outcomes: [], note: "" });
       }
     }
     render();
@@ -467,8 +527,8 @@
     }
     if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
     if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
-    if (a === "od") { patchPoint(id, pt => { pt.start_on = pt.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
-    if (a === "result") { patchPoint(id, pt => { pt.result = pt.result === el.dataset.v ? "" : el.dataset.v; }); return; }
+    if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
+    if (a === "result") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.result = o.result === el.dataset.v ? "" : el.dataset.v; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
     if (a === "pick") {
@@ -497,7 +557,8 @@
       if (a === "pm-up") movePoint(pid, -1);
       if (a === "pm-down") movePoint(pid, 1);
       if (a === "pm-clear") patchPoint(pid, x => { x.lineup = []; });
-      if (a === "pm-clear-result") patchPoint(pid, x => { x.result = ""; x.start_on = ""; });
+      if (a === "pm-clear-result") patchPoint(pid, x => { x.outcomes = []; });
+      if (a === "pm-plays") { const v = +el.dataset.v; patchPoint(pid, x => { x.plays = v; x.outcomes = x.outcomes.slice(0, v); }); }
       return;
     }
     if (a === "zone-add") { openSheet({ type: "pick", zone: el.dataset.z }); return; }
@@ -523,8 +584,8 @@
     const el = e.target;
     if (el.id === "gameSel") { ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
-    if (a === "scorer") { patchPoint(id, pt => { pt.scorer = el.value || null; if (pt.assist === pt.scorer) pt.assist = null; }); return; }
-    if (a === "assist") { patchPoint(id, pt => { pt.assist = el.value || null; if (pt.scorer === pt.assist) pt.scorer = null; }); return; }
+    if (a === "scorer") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = el.value || null; if (o.assist === o.scorer) o.assist = null; }); return; }
+    if (a === "assist") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.assist = el.value || null; if (o.scorer === o.assist) o.scorer = null; }); return; }
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
     if (a === "p-nick") { const p = P(id), v = el.value.trim(); if (v !== p.nick) savePlayer({ ...p, nick: v }); return; }
   });
