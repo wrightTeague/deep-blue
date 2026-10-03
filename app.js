@@ -6,6 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
+  const APP_VERSION = "2026.10.02.3"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -647,6 +648,21 @@
       load(true);
     }
   });
+
+  // GitHub Pages lets browsers cache files for ~10 minutes. Check version.json (never cached)
+  // and reload onto the new build when one is published, so nobody edits with an old copy.
+  async function checkVersion() {
+    try {
+      const r = await fetch("version.json?" + Date.now(), { cache: "no-store" });
+      const { v } = await r.json();
+      if (v && v !== APP_VERSION && pending === 0) {
+        const u = new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
+      }
+    } catch (e) {}
+  }
+  checkVersion();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkVersion(); });
+  setInterval(() => { if (!document.hidden) checkVersion(); }, 5 * 60000);
 
   window.addEventListener("focus", () => { if (S.team) scheduleRefresh(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.team) scheduleRefresh(); });
