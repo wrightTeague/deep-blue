@@ -2,7 +2,7 @@
 
 Point-by-point line planner and stat tracker for Deep Blue Ultimate (F&M club ultimate).
 
-- **Points:** plan as many points ahead as you want, 7 players each, with Handle / Cut / Pop roles.
+- **Points:** plan as many points ahead as you want, 7 players each, with Handle / Cut roles.
 - **Zone:** deep deep, cup and short deep assignments per game.
 - **Stats:** points played (O/D), goals, assists, holds and breaks, per game or across all games.
 - **Roster:** add players, set W/M matchup, nicknames, mark people out.

@@ -7,8 +7,8 @@
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
   const SLOTS = 7;
-  const ROLES = ["", "H", "C", "P"];
-  const ROLE_NAME = { H: "Handle", C: "Cut", P: "Pop" };
+  const ROLES = ["", "H", "C"];
+  const ROLE_NAME = { H: "Handle", C: "Cut" };
   const ZONES = [["deep", "Deep deep"], ["cup", "Cup"], ["short", "Short deep"]];
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -208,7 +208,6 @@
       <div class="legend" style="margin-bottom:12px">
         <span class="row" style="gap:5px"><span class="role" data-r="H">H</span>Handle</span>
         <span class="row" style="gap:5px"><span class="role" data-r="C">C</span>Cut</span>
-        <span class="row" style="gap:5px"><span class="role" data-r="P">P</span>Pop</span>
         <span>Tap a letter to change a role, a name to swap.</span>
       </div>
       <div class="points">${cards}<button class="add-point" data-act="add-point">+ Add point</button></div>`;
@@ -221,10 +220,10 @@
     for (let k = 0; k < SLOTS; k++) {
       const s = line[k];
       if (s) {
-        const p = P(s.p);
+        const p = P(s.p), r = s.r === "P" ? "C" : (s.r || "");
         const ball = pt.result === "us" ? (pt.scorer === s.p ? '<span class="ball">Goal</span>' : pt.assist === s.p ? '<span class="ball">Assist</span>' : "") : "";
         slots.push(`<li class="slot">
-          <button class="role" data-r="${s.r || ""}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[s.r] || "none"}. Tap to change">${s.r || "–"}</button>
+          <button class="role" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button>
           <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}</span>${ball}</button>
         </li>`);
       } else {
@@ -467,7 +466,7 @@
       return;
     }
     if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
-    if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) s.r = ROLES[(ROLES.indexOf(s.r || "") + 1) % ROLES.length]; }); return; }
+    if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
     if (a === "od") { patchPoint(id, pt => { pt.start_on = pt.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
     if (a === "result") { patchPoint(id, pt => { pt.result = pt.result === el.dataset.v ? "" : el.dataset.v; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
