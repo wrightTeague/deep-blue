@@ -211,3 +211,6 @@ table.stats td .pl{display:flex;align-items:center;gap:8px}
 .badge{display:inline-grid;place-items:center;width:17px;height:17px;margin-left:6px;border-radius:50%;border:1.5px solid var(--blue);color:var(--blue);font-family:var(--hand);font-weight:700;font-size:10px;line-height:1;vertical-align:2px}
 .badge-btn{width:30px;height:30px;border-radius:50%;border:1.5px dashed var(--faint);background:transparent;font-family:var(--hand);font-weight:700;font-size:14px;color:var(--faint);padding:0}
 .badge-btn.on{border:1.5px solid var(--blue);color:var(--blue)}
+
+.eyebrow{font-family:var(--hand);font-weight:700;font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 2px}
+select.line-in{font-size:18px;color:var(--ink);padding:4px 2px}

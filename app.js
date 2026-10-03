@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.02.3"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.03.1"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -34,7 +34,7 @@
 
   // ---------- state ----------
   let CODE = store.get("code", "");
-  let S = { team: null, players: [], games: [], points: [] };
+  let S = { team: null, tournaments: [], players: [], games: [], points: [] };
   const ui = { tab: store.get("tab", "points"), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
 
@@ -42,6 +42,8 @@
   const label = p => p ? (p.nick || p.name) : "?";
   const badge = p => p && p.badge ? `<span class="badge" title="${BADGE_NAME[p.badge]}" aria-label="${BADGE_NAME[p.badge]}">${p.badge}</span>` : "";
   const game = () => S.games.find(g => g.id === ui.gameId) || null;
+  const tours = () => S.tournaments || [];
+  const tourOf = g => g && g.tournament_id ? tours().find(t => t.id === g.tournament_id) || null : null;
   const gamePoints = gid => S.points.filter(x => x.game_id === gid).sort((a, b) => a.pos - b.pos);
   const activePlayers = () => S.players.filter(p => p.active);
   const sortPlayers = list => list.slice().sort((a, b) => (a.gender === b.gender ? 0 : a.gender === "W" ? -1 : b.gender === "W" ? 1 : 0) || label(a).localeCompare(label(b)));
@@ -66,7 +68,7 @@
   async function load(first) {
     try {
       const d = await rpc("app_load");
-      S = { team: d.team, players: d.players || [], games: d.games || [], points: d.points || [] };
+      S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [] };
       store.set("cache", S);
       if (!game()) ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null;
       if (first) connect();
@@ -181,7 +183,10 @@
     const active = document.activeElement;
     const keep = active && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
     const tabsHTML = TABS.map(([k, t]) => `<button data-act="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ""}>${t}</button>`).join("");
-    const gameOpts = S.games.map(g => `<option value="${g.id}" ${g.id === ui.gameId ? "selected" : ""}>${esc(g.name)}${g.game_date ? " · " + fmtDate(g.game_date) : ""}</option>`).join("");
+    const opt = (g, withDate) => `<option value="${g.id}" ${g.id === ui.gameId ? "selected" : ""}>${esc(g.name)}${withDate && g.game_date ? " · " + fmtDate(g.game_date) : ""}</option>`;
+    const loose = S.games.filter(g => !tourOf(g));
+    const gameOpts = tours().map(t => { const gs = S.games.filter(g => g.tournament_id === t.id); return gs.length ? `<optgroup label="${esc(t.name)}">${gs.map(g => opt(g, false)).join("")}</optgroup>` : ""; }).join("")
+      + (loose.length ? (tours().length ? `<optgroup label="Other games">${loose.map(g => opt(g, true)).join("")}</optgroup>` : loose.map(g => opt(g, true)).join("")) : "");
     app.innerHTML = `
       <header class="top"><div class="top-in">
         <p class="brand">Deep Blue</p>
@@ -216,7 +221,7 @@
     const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from); }).join("");
     return `
       <div class="game-head">
-        <div><h2 class="sec">${esc(g.name)}</h2></div>
+        <div>${tourOf(g) ? `<p class="eyebrow">${esc(tourOf(g).name)}${g.game_date ? " · " + fmtDate(g.game_date) : ""}</p>` : ""}<h2 class="sec">${esc(g.name)}</h2></div>
         <div class="score">${st.us}–${st.them}<small>${st.holds} holds · ${st.breaks} breaks</small></div>
       </div>
       <div class="legend" style="margin-bottom:12px">
@@ -344,7 +349,8 @@
   function renderStats() {
     const scope = ui.stats.scope;
     const g = game();
-    const pts = scope === "game" && g ? gamePoints(g.id) : S.points.slice();
+    const t = tourOf(g), sc = scope === "tour" && !t ? "game" : scope;
+    const pts = sc === "game" && g ? gamePoints(g.id) : sc === "tour" ? S.points.filter(x => { const gg = S.games.find(y => y.id === x.game_id); return gg && gg.tournament_id === t.id; }) : S.points.slice();
     const { team, rows } = computeStats(pts);
     const keyMap = { name: r => label(P(r.id)).toLowerCase(), pts: r => r.pts, o: r => r.o, d: r => r.d, g: r => r.g, a: r => r.a };
     const k = ui.stats.sort, f = keyMap[k] || keyMap.pts;
@@ -355,8 +361,9 @@
       <div class="row" style="justify-content:space-between">
         <h2 class="sec">Stats</h2>
         <div class="seg" role="group" aria-label="Which games">
-          <button data-act="stats-scope" data-v="game" aria-pressed="${scope === "game"}">This game</button>
-          <button data-act="stats-scope" data-v="all" aria-pressed="${scope === "all"}">All games</button>
+          <button data-act="stats-scope" data-v="game" aria-pressed="${sc === "game"}">This game</button>
+          ${t ? `<button data-act="stats-scope" data-v="tour" aria-pressed="${sc === "tour"}">Tournament</button>` : ""}
+          <button data-act="stats-scope" data-v="all" aria-pressed="${sc === "all"}">All games</button>
         </div>
       </div>
       <div class="team-line">
@@ -457,21 +464,40 @@
         <button class="danger" data-act="pm-delete">${s.confirm ? "Tap again to delete Line " + (i + 1) : "Delete line"}</button>
       </div>`;
     } else if (s.type === "game-menu") {
-      const g = game();
+      const g = game(), t = tourOf(g);
       title = g ? esc(g.name) : "Games";
       body = `<div class="menu-list">
+        ${t ? `<button data-act="copy-game">Next game in ${esc(t.name)} (copy these lines)</button>
+        <button data-act="new-game-tour">New empty game in ${esc(t.name)}</button>` : ""}
         <button data-act="new-game">New game</button>
-        ${g ? `<button data-act="edit-game">Rename or change date</button>
-        <button data-act="copy-game">New game copying these lines</button>
-        <button class="danger" data-act="delete-game">${s.confirm ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete game"}</button>` : ""}
+        <button data-act="new-tour">New tournament</button>
+        ${g ? `<button data-act="edit-game">Edit game (name, date, tournament)</button>
+        ${t ? "" : '<button data-act="copy-game">New game copying these lines</button>'}
+        <button class="danger" data-act="delete-game">${s.confirm === "game" ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete game"}</button>` : ""}
+        ${t ? `<button data-act="edit-tour">Rename ${esc(t.name)}</button>
+        <button class="danger" data-act="delete-tour">${s.confirm === "tour" ? "Tap again: remove the tournament (its games are kept)" : "Remove tournament folder"}</button>` : ""}
       </div>`;
     } else if (s.type === "game-form") {
       const g = s.id ? S.games.find(x => x.id === s.id) : null;
-      title = g ? "Edit game" : s.copyFrom ? "New game from this plan" : "New game";
+      const src = s.copyFrom ? S.games.find(x => x.id === s.copyFrom) : game();
+      const tid = g ? (g.tournament_id || "") : (s.tour !== undefined ? s.tour : (src?.tournament_id || ""));
+      const sameTour = src && src.tournament_id && src.tournament_id === tid;
+      const date = g ? (g.game_date || "") : (tid ? ((sameTour && src.game_date) || tours().find(t => t.id === tid)?.start_date || "") : "");
+      title = g ? "Edit game" : s.copyFrom ? "Next game (same lines)" : "New game";
       body = `<form class="form" id="gameForm">
-        <label>Name<input class="line-in" id="gName" value="${esc(g ? g.name : "")}" placeholder="e.g. Haverford scrimmage" maxlength="80" autofocus required></label>
-        <label>Date<input class="line-in" id="gDate" type="date" value="${esc(g?.game_date || "")}"></label>
+        <label>Name<input class="line-in" id="gName" value="${esc(g ? g.name : "")}" placeholder="e.g. vs Haverford" maxlength="80" autofocus required></label>
+        <label>Tournament<select class="line-in" id="gTour"><option value="">None</option>${tours().map(t => `<option value="${t.id}" ${t.id === tid ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
+        <label>Date<input class="line-in" id="gDate" type="date" value="${esc(date)}"></label>
         <div class="row"><button class="btn primary" type="submit">${g ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
+      </form>`;
+    } else if (s.type === "tour-form") {
+      const t = s.id ? tours().find(x => x.id === s.id) : null;
+      title = t ? "Rename tournament" : "New tournament";
+      body = `<form class="form" id="tourForm">
+        <label>Name<input class="line-in" id="tName" value="${esc(t ? t.name : "")}" placeholder="e.g. Haverford Hat" maxlength="80" autofocus required></label>
+        <label>Date<input class="line-in" id="tDate" type="date" value="${esc(t?.start_date || "")}"></label>
+        ${t ? "" : '<p class="muted" style="margin:0;font-size:14px">Next you\'ll name its first game.</p>'}
+        <div class="row"><button class="btn primary" type="submit">${t ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
       </form>`;
     }
     root.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title.replace(/<[^>]+>/g, "")}">
@@ -516,8 +542,8 @@
   }
   function patchGame(fn) { const g = game(); if (!g) return; const next = JSON.parse(JSON.stringify(g)); fn(next); saveGame(next); }
 
-  async function createGame(name, date, copyFrom) {
-    const g = { id: uid(), name, opponent: "", game_date: date || null, zone: copyFrom ? JSON.parse(JSON.stringify(copyFrom.zone || {})) : { deep: [], cup: [], short: [] } };
+  async function createGame(name, date, copyFrom, tournamentId) {
+    const g = { id: uid(), name, opponent: "", game_date: date || null, tournament_id: tournamentId || null, zone: copyFrom ? JSON.parse(JSON.stringify(copyFrom.zone || {})) : { deep: [], cup: [], short: [] } };
     ui.gameId = g.id; store.set("game", g.id);
     const ok = await saveGame(g);
     if (ok && copyFrom) {
@@ -535,11 +561,20 @@
     if (a === "close") { closeSheet(); return; }
     if (a === "tab") { ui.tab = el.dataset.tab; store.set("tab", ui.tab); render(); window.scrollTo(0, 0); return; }
     if (a === "game-menu") { openSheet({ type: "game-menu" }); return; }
-    if (a === "new-game") { openSheet({ type: "game-form" }); return; }
+    if (a === "new-game") { openSheet({ type: "game-form", tour: "" }); return; }
+    if (a === "new-game-tour") { openSheet({ type: "game-form", tour: game()?.tournament_id || "" }); return; }
+    if (a === "new-tour") { openSheet({ type: "tour-form" }); return; }
+    if (a === "edit-tour") { openSheet({ type: "tour-form", id: game()?.tournament_id }); return; }
+    if (a === "delete-tour") {
+      if (ui.sheet.confirm !== "tour") { ui.sheet.confirm = "tour"; renderSheet(); return; }
+      const tid = game()?.tournament_id; closeSheet();
+      save("app_delete_tournament", { p_id: tid }, () => { S.tournaments = tours().filter(t => t.id !== tid); S.games.forEach(g => { if (g.tournament_id === tid) g.tournament_id = null; }); });
+      return;
+    }
     if (a === "edit-game") { openSheet({ type: "game-form", id: ui.gameId }); return; }
     if (a === "copy-game") { openSheet({ type: "game-form", copyFrom: ui.gameId }); return; }
     if (a === "delete-game") {
-      if (!ui.sheet.confirm) { ui.sheet.confirm = true; renderSheet(); return; }
+      if (ui.sheet.confirm !== "game") { ui.sheet.confirm = "game"; renderSheet(); return; }
       const gid = ui.gameId; closeSheet();
       save("app_delete_game", { p_id: gid }, () => { removeLocal("games", gid); S.points = S.points.filter(x => x.game_id !== gid); ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null; store.set("game", ui.gameId); });
       return;
@@ -630,10 +665,21 @@
       return;
     }
     if (f.id === "gameForm") {
-      const name = $("#gName").value.trim(), date = $("#gDate").value; if (!name) return;
+      const name = $("#gName").value.trim(), date = $("#gDate").value, tid = $("#gTour").value || null; if (!name) return;
       const s = ui.sheet; closeSheet();
-      if (s.id) { const g = S.games.find(x => x.id === s.id); saveGame({ ...g, name, game_date: date || null }); }
-      else createGame(name, date, s.copyFrom ? S.games.find(x => x.id === s.copyFrom) : null);
+      if (s.id) { const g = S.games.find(x => x.id === s.id); saveGame({ ...g, name, game_date: date || null, tournament_id: tid }); }
+      else createGame(name, date, s.copyFrom ? S.games.find(x => x.id === s.copyFrom) : null, tid);
+      return;
+    }
+    if (f.id === "tourForm") {
+      const name = $("#tName").value.trim(), date = $("#tDate").value; if (!name) return;
+      const s = ui.sheet;
+      if (s.id) { const t = tours().find(x => x.id === s.id); closeSheet(); save("app_save_tournament", { x: { ...t, name, start_date: date || null } }, () => Object.assign(t, { name, start_date: date || null })); }
+      else {
+        const t = { id: uid(), name, start_date: date || null };
+        save("app_save_tournament", { x: t }, () => { S.tournaments = [...tours(), t]; });
+        openSheet({ type: "game-form", tour: t.id });
+      }
       return;
     }
     if (f.id === "codeForm") {
