@@ -7,13 +7,14 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.2"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.3"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
   const BADGES = ["", "C", "P"];
   const BADGE_NAME = { C: "Captain", P: "President" };
-  const ZONES = [["deep", "Deep deep"], ["cup", "Cup"], ["short", "Short deep"]];
+  const ZONES = [["handlers", "Handlers"], ["deep", "Deep deep"], ["short", "Short deep"]];   // each also has a "<key>_ok" list: can play it if needed
+  const zoneName = k => { const ok = /_ok$/.test(k), z = ZONES.find(x => x[0] === k.replace(/_ok$/, "")); return z ? z[1] + (ok ? " (if needed)" : "") : ""; };
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const TOKEN = (new URLSearchParams(location.search).get("t") || "").trim();
@@ -398,20 +399,21 @@
   function saveZone(fn) {
     const g = game(); if (!g) return;
     const t = tourOf(g), next = JSON.parse(JSON.stringify(zoneOf(g)));
-    ZONES.forEach(([k]) => { next[k] = next[k] || []; });
+    ZONES.forEach(([k]) => { next[k] = next[k] || []; next[k + "_ok"] = next[k + "_ok"] || []; });
     fn(next);
     if (t) save("app_save_tournament_zone", { p_id: t.id, z: next }, () => { t.zone = next; });
     else patchGame(x => { x.zone = next; });
   }
   function renderZone() {
     const g = game(); if (!g) return "";
-    const z = zoneOf(g), t = tourOf(g);
-    const cols = ZONES.map(([k, t]) => {
-      const ids = z[k] || [];
-      const chips = ids.map((id, i) => { const p = P(id); return `<div class="chip"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${t}">×</button></div>`; }).join("");
-      return `<section class="zone-col"><h3>${t}</h3>${chips || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button></section>`;
-    }).join("");
-    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">${t ? `For every game in <b>${esc(t.name)}</b>.` : `For ${esc(g.name)} (not in a tournament).`} The line maker puts a deep deep on every line.</p><div class="zone-grid">${cols}</div></section>`;
+    const z = zoneOf(g), tour = tourOf(g);
+    const chips = (k, name) => (z[k] || []).map((id, i) => { const p = P(id); return `<div class="chip${/_ok$/.test(k) ? " backup" : ""}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${name}">×</button></div>`; }).join("");
+    const cols = ZONES.map(([k, name]) => `<section class="zone-col"><h3>${name}</h3>
+        ${chips(k, name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button>
+        <h4 class="zone-ok">Can play it if needed</h4>
+        ${chips(k + "_ok", name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm ghost" data-act="zone-add" data-z="${k}_ok" style="align-self:flex-start">+ Add backup</button>
+      </section>`).join("");
+    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">${tour ? `For every game in <b>${esc(tour.name)}</b>.` : `For ${esc(g.name)} (not in a tournament).`} The line maker gives every line 2 handlers, a deep deep and a short deep, using backups only when nobody on the main list fits. Anyone can play cup.</p><div class="zone-grid">${cols}</div></section>`;
   }
 
   // ---------- render: stats ----------
@@ -464,7 +466,6 @@
     };
     const link = location.origin + location.pathname + "?t=" + TOKEN;
     return `
-      ${renderZone()}
       <h2 class="sec">Roster</h2>
       <form class="add-form" id="addForm">
         <input class="line-in" id="addName" placeholder="Add a player (full name)" maxlength="60" style="flex:1;min-width:180px">
@@ -475,6 +476,7 @@
       <input class="line-in" id="rosterFilter" placeholder="Search roster" value="${esc(ui.rosterFilter)}" style="width:100%;max-width:340px">
       <p class="muted" style="font-size:14px;margin:8px 0 0">The nickname is what shows on line cards. Tap the dot to mark a captain (C) or president (P). "Out" hides someone from the player picker without deleting their stats.</p>
       <div class="roster-cols">${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}</div>
+      ${renderZone()}
       ${privateCard()}
       <div class="settings">
         <div class="card">
@@ -508,7 +510,8 @@
       const planned = plannedPoints(pts);
       let taken = new Set();
       if (s.pointId) { const pt = S.points.find(x => x.id === s.pointId); (pt?.lineup || []).forEach(x => taken.add(x.p)); }
-      if (s.zone) taken = new Set(zoneOf(g)[s.zone] || []);
+      const zMain = s.zone ? s.zone.replace(/_ok$/, "") : "";
+      if (s.zone) taken = new Set([...(zoneOf(g)[zMain] || []), ...(zoneOf(g)[zMain + "_ok"] || [])]);
       const q = (s.q || "").toLowerCase(), f = s.f || "";
       // Picking for a line (not a zone): show how long each person has sat and how many lines
       // they've played, and sort by either, once there's an earlier line or game to go on.
@@ -530,10 +533,10 @@
         const sat = v.pts === 0 ? `<span class="rest b2b">just played</span>` : `sat ${plural(v.lines, "line")} (${plural(v.pts, "pt")})`;
         return `${sat} · ${plural(v.played, "line")} played`;
       };
-      const meta = p => taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
+      const meta = p => s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
       const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
-      title = s.zone ? "Add to " + (ZONES.find(z => z[0] === s.zone) || [0, ""])[1] : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
+      title = s.zone ? "Add to " + zoneName(s.zone) : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
       tools = `<input class="line-in" id="pickQ" placeholder="Search" value="${esc(s.q || "")}" autofocus autocomplete="off">
         <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>
         ${rest ? `<div class="seg" role="group" aria-label="Sort">${[["sat", "Lines sat"], ["played", "Lines played"], ["az", "A–Z"]].map(([v, t]) => `<button data-act="pick-sort" data-v="${v}" aria-pressed="${sortBy === v}">${t}</button>`).join("")}</div>` : ""}`;
@@ -586,7 +589,7 @@
         <div class="row"><button class="btn primary" type="submit">${g ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
       </form>`;
     } else if (s.type === "fill") {
-      const g = game(), deepIds = (zoneOf(g).deep || []).filter(id => P(id));
+      const g = game(), zz = zoneOf(g), zoneSet = ZONES.some(([k]) => (zz[k] || []).length || (zz[k + "_ok"] || []).length);
       title = "Fill lines";
       body = `<div class="form">
         <div class="row" style="gap:10px"><span>Add</span>
@@ -597,7 +600,7 @@
         <ul class="fill-rules">
           <li>2 captains or president per line, whoever has rested longest</li>
           <li>3 women and 4 men (asks first if men fall behind)</li>
-          <li>${deepIds.length ? `A deep deep on every line: ${deepIds.map(id => esc(label(P(id)))).join(", ")}` : `<b>No deep deeps set for this game.</b> Add them under Zone spots on the Roster tab.`}</li>
+          <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set${tourOf(g) ? " for this tournament" : ""}.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back, people out are skipped</li>
           <li>${ui.owner ? "Using your private settings (rookies and pairs)" : "Private settings are locked on this device, so rookies and pairs aren't used"}</li>
           <li>Players you've already placed stay put. Lines with results aren't touched.</li>
@@ -658,7 +661,7 @@
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
         players: S.players, lines, idx: i, prevLines, keep, keepRoles, ratio,
-        deep: new Set(zoneOf(g).deep || []), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
+        positions: Object.fromEntries(ZONES.map(([k]) => [k, { main: new Set(zoneOf(g)[k] || []), ok: new Set(zoneOf(g)[k + "_ok"] || []) }])), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
       });
       lines[i].lineup = r.lineup;
       r.notes.forEach(n => notes.push(`Line ${i + 1}: ${n}`));

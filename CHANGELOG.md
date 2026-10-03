@@ -5,6 +5,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 3, 2026 (evening)
 
 **Test board**
+- **Zone spots are Handlers, Deep deep and Short deep** (no more Cup, since anyone can play it), shown below the roster. Each has a main list and a "can play it if needed" list.
+- **The line maker uses them:** every line gets at least 2 handlers, a deep deep and a short deep (two different people). It goes to the "if needed" list only when nobody on the main list fits.
 - **Zone spots moved to the Roster tab** and are set once per tournament instead of per game. The Zone tab is gone. A game outside a tournament still has its own.
 - **Keep apart / keep together take a list.** Pick one person, then everyone they should stay away from (or go with), instead of adding pairs one at a time.
 - **Automatic line maker.** In the game menu (⋯), "Fill lines" plans new lines and fills empty spots in lines that haven't been played. "Suggest players for the empty spots" in a line's menu does one line. Each line gets 2 captains or president (whoever has rested longest), 3 women and 4 men, a deep deep, and nobody back to back. Everyone else goes by who has sat the most lines and played the fewest, carrying over from the last game that day. Players you placed stay put, lines with results are never touched, and there's an Undo.

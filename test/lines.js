@@ -49,8 +49,9 @@
   /* Plan one line.
      opts: players (roster, with id/gender/badge/active), lines (this game's lines, in order),
      idx (which line), prevLines, keep (player ids already on the line; never moved),
-     ratio { W, M } (default 3 W / 4 M), leaders per line (default 2), deep (Set of deep-deep ids
-     for this game), rookies (Set), apart and together (lists of { p, with: [ids] } or [id, id]),
+     ratio { W, M } (default 3 W / 4 M), leaders per line (default 2),
+     positions ({ handlers, deep, short }, each { main: Set, ok: Set } for "can play it if
+     needed"), deep (older single Set of deep deeps, used when positions has none), rookies (Set), apart and together (lists of { p, with: [ids] } or [id, id]),
      seed (string).
      Returns { lineup: [{p, r}], notes: [string] }. */
   function planLine(o) {
@@ -95,8 +96,8 @@
       // Keep-together partners come along if they fit.
       partnersOf(together, p.id).forEach(id => { const q = byId.get(id); if (q && q.active !== false && line.length < SLOTS && fits(q, true)) line.push({ p: q.id, r: isLeader(q) ? "H" : "" }); });
     }
-    function fill(pool, howMany, role) {
-      for (const strict of [true, false]) {
+    function fill(pool, howMany, role, modes) {
+      for (const strict of modes || [true, false]) {
         for (const p of order(pool)) {
           if (howMany() <= 0 || line.length >= SLOTS) return;
           if (fits(p, strict)) add(p, role);
@@ -107,10 +108,36 @@
     // 1. Two leaders (captains and president), whoever has rested longest.
     const leaderPool = active.filter(isLeader);
     fill(leaderPool, () => wantLeaders - count(isLeader), "H");
-    // 2. A deep deep, if this game has any set in Zone and none is on yet.
-    if (deep.size && !count(p => deep.has(p.id))) {
+    // 2. Zone spots: at least 2 handlers, plus a deep deep and a short deep (two different
+    //    people). The main list goes first; the "can play it if needed" list only when nobody
+    //    on the main list fits. A spot with nobody listed is skipped.
+    const pos = o.positions || {};
+    const inList = (k, id) => !!(pos[k] && ((pos[k].main && pos[k].main.has(id)) || (pos[k].ok && pos[k].ok.has(id))));
+    const handlersOn = () => count(p => inList("handlers", p.id));
+    // Who on the line covers deep and short, with nobody doing both.
+    const dShort = () => {
+      const ids = line.map(s => s.p);
+      const tryAssign = (d, sh) => d !== sh && inList("deep", d) && inList("short", sh);
+      let deepOk = ids.some(id => inList("deep", id)), shortOk = ids.some(id => inList("short", id));
+      if (deepOk && shortOk && !ids.some(d => ids.some(sh => tryAssign(d, sh)))) shortOk = false;   // only one person covers both
+      return { deep: deepOk, short: shortOk };
+    };
+    const needs = [
+      ["handlers", "handlers", () => 2 - handlersOn(), 2],
+      ["deep", "deep deep", () => (dShort().deep ? 0 : 1), 1],
+      ["short", "short deep", () => (dShort().short ? 0 : 1), 1],
+    ];
+    for (const [k, name, missing] of needs) {
+      if (!pos[k] || !((pos[k].main && pos[k].main.size) || (pos[k].ok && pos[k].ok.size))) continue;
+      const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
+      // Main list rested, then backups rested, then main list even if back to back, then backups.
+      for (const strict of [true, false]) for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
+      if (missing() > 0) notes.push(k === "handlers" ? "Fewer than 2 handlers fit." : `No ${name} fits.`);
+    }
+    // Older single list of deep deeps (games outside a tournament).
+    if (!pos.deep && deep.size && !count(p => deep.has(p.id))) {
       fill(active.filter(p => deep.has(p.id)), () => (count(p => deep.has(p.id)) ? 0 : 1), "");
-      if (!count(p => deep.has(p.id))) notes.push("No deep deep fits on this line.");
+      if (!count(p => deep.has(p.id))) notes.push("No deep deep fits.");
     }
     // 3. Everyone else by rest. Leaders only if nobody else fits, so they stay near 1 line in 3.
     fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, "");

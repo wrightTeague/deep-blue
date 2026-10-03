@@ -265,3 +265,5 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
 .grp-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .grp-add{max-width:200px;font-size:15px}
 .zone-sec{margin-bottom:26px}
+.zone-ok{margin:10px 0 0;font-family:var(--print);font-weight:400;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.chip.backup{background:transparent;box-shadow:none;border:1.5px dashed var(--faint)}
