@@ -10,6 +10,8 @@ Point-by-point line planner and stat tracker for Deep Blue Ultimate (F&M club ul
 - **Stats:** points played (O/D), goals, assists, holds and breaks, per game or across all games.
 - **Roster:** add players, set W/M matchup, nicknames, captain (C) / president (P) badges, mark people out.
 
+See CHANGELOG.md for what changed and when.
+
 Everyone with the team link and passcode can edit at the same time; changes show up on other open devices within a second or two.
 
 ## How it works
@@ -20,4 +22,4 @@ Static site (`index.html`, `app.js`, `styles.css`) on GitHub Pages. Data is in a
 
 ## Test board
 
-`test/` is a separate copy of the app for trying new features (right now: the automatic line maker and private settings). It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json` and loads `lines.js`, the line-making logic, which has no DOM code so it can be tested in Node. Private settings (rookies, keep-apart and keep-together pairs) live in the `owner_settings` table and are only returned by `app_owner_load` / `app_owner_save` with a second, private code.
+`test/` is a separate copy of the app for trying new features (right now: the automatic line maker and private settings). It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json` and loads `lines.js`, the line-making logic, which has no DOM code so it can be tested in Node. Zone spots on the test board are stored per tournament (`tournaments.zone`, saved with `app_save_tournament_zone`). Private settings (rookies, keep-apart and keep-together lists) live in the `owner_settings` table and are only returned by `app_owner_load` / `app_owner_save` with a second, private code.

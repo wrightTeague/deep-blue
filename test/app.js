@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.1"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.2"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -37,7 +37,7 @@
   let CODE = store.get("code", "");
   let OWNER = store.get("owner", "");  // private settings code, only on this device
   let S = { team: null, tournaments: [], players: [], games: [], points: [] };
-  const ui = { tab: store.get("tab", "points"), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
+  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "points"))), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
@@ -214,7 +214,7 @@
   const restFor = (g, lines, idx) => { const pg = prevGameOf(g); return restBefore(lines, idx, pg ? gamePoints(pg.id) : null); };
 
   // ---------- render: shell ----------
-  const TABS = [["points", "Points"], ["zone", "Zone"], ["stats", "Stats"], ["roster", "Roster"]];
+  const TABS = [["points", "Points"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
 
   function render() {
     if (!S.team) return;
@@ -236,7 +236,7 @@
         <nav class="tabs" aria-label="Sections">${tabsHTML}</nav>
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
       </div></header>
-      <main id="main">${ui.tab === "zone" ? renderZone() : ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
+      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
       ${ui.auto && ui.tab === "points" ? autoBar() : ui.clip && ui.tab === "points" ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
@@ -391,16 +391,27 @@
     </section>`;
   }
 
-  // ---------- render: zone ----------
+  // ---------- zone spots ----------
+  // Zone spots belong to the tournament (they don't change game to game). A game outside a
+  // tournament keeps its own.
+  const zoneOf = g => { const t = tourOf(g); return (t ? t.zone : g && g.zone) || {}; };
+  function saveZone(fn) {
+    const g = game(); if (!g) return;
+    const t = tourOf(g), next = JSON.parse(JSON.stringify(zoneOf(g)));
+    ZONES.forEach(([k]) => { next[k] = next[k] || []; });
+    fn(next);
+    if (t) save("app_save_tournament_zone", { p_id: t.id, z: next }, () => { t.zone = next; });
+    else patchGame(x => { x.zone = next; });
+  }
   function renderZone() {
-    const g = game(); if (!g) return noGame();
-    const z = g.zone || {};
+    const g = game(); if (!g) return "";
+    const z = zoneOf(g), t = tourOf(g);
     const cols = ZONES.map(([k, t]) => {
       const ids = z[k] || [];
       const chips = ids.map((id, i) => { const p = P(id); return `<div class="chip"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${t}">×</button></div>`; }).join("");
       return `<section class="zone-col"><h3>${t}</h3>${chips || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button></section>`;
     }).join("");
-    return `<h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">For ${esc(g.name)}.</p><div class="zone-grid">${cols}</div>`;
+    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">${t ? `For every game in <b>${esc(t.name)}</b>.` : `For ${esc(g.name)} (not in a tournament).`} The line maker puts a deep deep on every line.</p><div class="zone-grid">${cols}</div></section>`;
   }
 
   // ---------- render: stats ----------
@@ -453,6 +464,7 @@
     };
     const link = location.origin + location.pathname + "?t=" + TOKEN;
     return `
+      ${renderZone()}
       <h2 class="sec">Roster</h2>
       <form class="add-form" id="addForm">
         <input class="line-in" id="addName" placeholder="Add a player (full name)" maxlength="60" style="flex:1;min-width:180px">
@@ -496,7 +508,7 @@
       const planned = plannedPoints(pts);
       let taken = new Set();
       if (s.pointId) { const pt = S.points.find(x => x.id === s.pointId); (pt?.lineup || []).forEach(x => taken.add(x.p)); }
-      if (s.zone) taken = new Set((g?.zone?.[s.zone]) || []);
+      if (s.zone) taken = new Set(zoneOf(g)[s.zone] || []);
       const q = (s.q || "").toLowerCase(), f = s.f || "";
       // Picking for a line (not a zone): show how long each person has sat and how many lines
       // they've played, and sort by either, once there's an earlier line or game to go on.
@@ -574,7 +586,7 @@
         <div class="row"><button class="btn primary" type="submit">${g ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
       </form>`;
     } else if (s.type === "fill") {
-      const g = game(), deepIds = (g?.zone?.deep || []).filter(id => P(id));
+      const g = game(), deepIds = (zoneOf(g).deep || []).filter(id => P(id));
       title = "Fill lines";
       body = `<div class="form">
         <div class="row" style="gap:10px"><span>Add</span>
@@ -585,7 +597,7 @@
         <ul class="fill-rules">
           <li>2 captains or president per line, whoever has rested longest</li>
           <li>3 women and 4 men (asks first if men fall behind)</li>
-          <li>${deepIds.length ? `A deep deep on every line: ${deepIds.map(id => esc(label(P(id)))).join(", ")}` : `<b>No deep deeps set for this game.</b> Add them in Zone so every line gets one.`}</li>
+          <li>${deepIds.length ? `A deep deep on every line: ${deepIds.map(id => esc(label(P(id)))).join(", ")}` : `<b>No deep deeps set for this game.</b> Add them under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back, people out are skipped</li>
           <li>${ui.owner ? "Using your private settings (rookies and pairs)" : "Private settings are locked on this device, so rookies and pairs aren't used"}</li>
           <li>Players you've already placed stay put. Lines with results aren't touched.</li>
@@ -646,7 +658,7 @@
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
         players: S.players, lines, idx: i, prevLines, keep, keepRoles, ratio,
-        deep: new Set(g.zone?.deep || []), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
+        deep: new Set(zoneOf(g).deep || []), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
       });
       lines[i].lineup = r.lineup;
       r.notes.forEach(n => notes.push(`Line ${i + 1}: ${n}`));
@@ -682,13 +694,25 @@
     try {
       const d = await sb.rpc("app_owner_load", { p_token: TOKEN, p_code: CODE, p_owner: OWNER });
       if (d.error) throw d.error;
-      ui.owner = { rookies: d.data.rookies || [], apart: d.data.apart || [], together: d.data.together || [] };
+      ui.owner = { rookies: d.data.rookies || [], apart: toGroups(d.data.apart), together: toGroups(d.data.together) };
       store.set("owner", OWNER); if (fromForm) toast("Unlocked on this device");
     } catch (e) {
       ui.owner = null; OWNER = ""; store.del("owner");
       if (fromForm) toast(/bad_owner_code/.test(e.message || "") ? "That private code didn't work" : "Couldn't reach the board");
     }
     render();
+  }
+  // Keep apart / together are stored as one person and a list: [{ p, with: [ids] }].
+  // Older plain pairs ([a, b]) get folded into that shape.
+  function toGroups(list) {
+    const out = [];
+    (list || []).forEach(x => {
+      const g = Array.isArray(x) ? { p: x[0], with: [x[1]] } : x && x.p ? { p: x.p, with: (x.with || []).slice() } : null;
+      if (!g) return;
+      const same = out.find(y => y.p === g.p);
+      if (same) g.with.forEach(id => { if (!same.with.includes(id)) same.with.push(id); }); else out.push(g);
+    });
+    return out;
   }
   async function saveOwner() {
     render();
@@ -702,15 +726,22 @@
     </section>`;
     const people = sortPlayers(activePlayers()), rk = new Set(ui.owner.rookies);
     const opts = people.map(p => `<option value="${p.id}">${esc(label(p))}</option>`).join("");
-    const pairs = k => `${ui.owner[k].map(([x, y], i) => `<span class="pair">${esc(label(P(x)))} ${k === "apart" ? "≠" : "+"} ${esc(label(P(y)))}<button class="icon-btn" data-act="o-del" data-k="${k}" data-i="${i}" aria-label="Remove pair">×</button></span>`).join("") || '<span class="muted">None yet.</span>'}
-      <div class="row" style="gap:6px"><select class="line-in" id="${k}A"><option value="">Pick…</option>${opts}</select><select class="line-in" id="${k}B"><option value="">Pick…</option>${opts}</select><button class="btn sm" data-act="o-add" data-k="${k}">Add</button></div>`;
+    const groups = k => { const verb = k === "apart" ? "stays away from" : "goes with"; return `${ui.owner[k].map((g, i) => {
+        const others = people.filter(p => p.id !== g.p && !g.with.includes(p.id)).map(p => `<option value="${p.id}">${esc(label(p))}</option>`).join("");
+        return `<div class="grp">
+          <div class="grp-head"><b>${esc(label(P(g.p)))}</b> <span class="muted">${verb}</span><button class="icon-btn" data-act="o-del" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(label(P(g.p)))}'s list">×</button></div>
+          <div class="grp-list">${g.with.map(id => `<span class="pair">${esc(label(P(id)))}<button class="icon-btn" data-act="o-unwith" data-k="${k}" data-i="${i}" data-p="${id}" aria-label="Remove ${esc(label(P(id)))}">×</button></span>`).join("")}
+            <select class="line-in grp-add" data-act="o-with" data-k="${k}" data-i="${i}" aria-label="Add someone"><option value="">+ add someone</option>${others}</select></div>
+        </div>`;
+      }).join("") || '<span class="muted">Nobody yet.</span>'}
+      <div class="row" style="gap:6px"><select class="line-in" id="${k}P"><option value="">Pick a person…</option>${opts}</select><button class="btn sm" data-act="o-add" data-k="${k}">Add</button></div>` };
     return `<section class="card private"><div class="row" style="justify-content:space-between"><h3>Private settings</h3><button class="btn sm ghost" data-act="o-lock">Lock</button></div>
       <p class="muted" style="margin:0">Only on devices where you've entered the private code. Nobody else sees these.</p>
       <h4>Rookies <span class="muted">(${rk.size})</span></h4>
       <p class="muted" style="margin:0;font-size:14px">The line maker spreads them out so no line is stacked with rookies.</p>
       <div class="tchips">${people.map(p => `<button class="tchip" data-act="o-rookie" data-id="${p.id}" aria-pressed="${rk.has(p.id)}">${esc(label(p))}</button>`).join("")}</div>
-      <h4>Keep apart</h4><p class="muted" style="margin:0;font-size:14px">Never on the same line.</p><div class="pairs">${pairs("apart")}</div>
-      <h4>Keep together</h4><p class="muted" style="margin:0;font-size:14px">Put on the same line when they both fit.</p><div class="pairs">${pairs("together")}</div>
+      <h4>Keep apart</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then everyone they shouldn't share a line with. Never broken.</p><div class="pairs">${groups("apart")}</div>
+      <h4>Keep together</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then who should come with them. They come along when they fit.</p><div class="pairs">${groups("together")}</div>
     </section>`;
   }
 
@@ -826,17 +857,18 @@
     if (a === "auto-done") { ui.auto = null; render(); return; }
     if (a === "o-rookie") { const r = new Set(ui.owner.rookies); r.has(id) ? r.delete(id) : r.add(id); ui.owner.rookies = [...r]; saveOwner(); return; }
     if (a === "o-add") {
-      const k = el.dataset.k, x = $("#" + k + "A").value, y = $("#" + k + "B").value;
-      if (!x || !y || x === y) { toast("Pick two different people"); return; }
-      if (ui.owner[k].some(([p, q]) => (p === x && q === y) || (p === y && q === x))) { toast("Already there"); return; }
-      ui.owner[k] = [...ui.owner[k], [x, y]]; saveOwner(); return;
+      const k = el.dataset.k, x = $("#" + k + "P").value;
+      if (!x) { toast("Pick a person first"); return; }
+      if (ui.owner[k].some(g => g.p === x)) { toast(label(P(x)) + " already has a list. Add people to it."); return; }
+      ui.owner[k] = [...ui.owner[k], { p: x, with: [] }]; saveOwner(); return;
     }
     if (a === "o-del") { const k = el.dataset.k, i = +el.dataset.i; ui.owner[k] = ui.owner[k].filter((_, j) => j !== i); saveOwner(); return; }
+    if (a === "o-unwith") { const k = el.dataset.k, i = +el.dataset.i, g = ui.owner[k][i]; g.with = g.with.filter(x => x !== el.dataset.p); saveOwner(); return; }
     if (a === "o-lock") { OWNER = ""; store.del("owner"); ui.owner = null; render(); toast("Private settings locked on this device"); return; }
     if (a === "pick-sort") { ui.pickSort = el.dataset.v; store.set("pickSort", ui.pickSort); renderSheet(); return; }
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
-      if (s.zone) { const z = s.zone; patchGame(g => { g.zone = g.zone || {}; g.zone[z] = [...(g.zone[z] || []), pid]; }); renderSheet(); return; }
+      if (s.zone) { const z = s.zone; saveZone(n => { n[z] = [...n[z], pid]; }); renderSheet(); return; }
       patchPoint(s.pointId, pt => { pt.lineup = pt.lineup || []; if (s.current) { const slot = pt.lineup.find(x => x.p === s.current); if (slot) slot.p = pid; } else if (pt.lineup.length < SLOTS) pt.lineup.push({ p: pid, r: "" }); });
       closeSheet(); return;
     }
@@ -881,7 +913,7 @@
     }
     if (a === "bucket") { ui.openBucket = ui.openBucket === el.dataset.k ? null : el.dataset.k; render(); return; }
     if (a === "zone-add") { openSheet({ type: "pick", zone: el.dataset.z }); return; }
-    if (a === "zone-remove") { const z = el.dataset.z, i = +el.dataset.i; patchGame(g => { g.zone[z].splice(i, 1); }); return; }
+    if (a === "zone-remove") { const z = el.dataset.z, i = +el.dataset.i; saveZone(n => { n[z].splice(i, 1); }); return; }
     if (a === "stats-scope") { ui.stats.scope = el.dataset.v; render(); return; }
     if (a === "sort") { ui.stats.sort = el.dataset.k; render(); return; }
     if (a === "add-g") { ui.addG = el.dataset.v; render(); return; }
@@ -905,6 +937,7 @@
     if (el.id === "gameSel") { ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
+    if (a === "o-with") { const g = ui.owner[el.dataset.k][+el.dataset.i]; if (el.value && !g.with.includes(el.value)) { g.with.push(el.value); saveOwner(); } return; }
     if (a === "p-nick") { const p = P(id), v = el.value.trim(); if (v !== p.nick) savePlayer({ ...p, nick: v }); return; }
   });
 

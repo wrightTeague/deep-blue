@@ -259,3 +259,9 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
 .pairs select{max-width:150px}
 .form label.fill-check{display:flex;flex-direction:row;align-items:flex-start;gap:10px;font-size:16px;color:var(--ink)}
 .fill-check input{width:20px;height:20px;margin-top:2px;flex:none}
+.grp{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;align-self:stretch}
+.grp-head{display:flex;align-items:center;gap:8px;font-size:17px}
+.grp-head .icon-btn{margin-left:auto}
+.grp-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.grp-add{max-width:200px;font-size:15px}
+.zone-sec{margin-bottom:26px}

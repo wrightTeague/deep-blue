@@ -40,6 +40,9 @@
   }
 
   const isLeader = p => p.badge === "C" || p.badge === "P";
+  // Keep-apart / keep-together come in as one person and a list ({ p, with: [ids] }); older
+  // settings were plain pairs ([a, b]). Either way, work with pairs.
+  const toPairs = list => (list || []).flatMap(x => Array.isArray(x) ? [x] : (x && x.p ? (x.with || []).map(y => [x.p, y]) : []));
   const pairHas = (pairs, a, b) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   const partnersOf = (pairs, a) => pairs.filter(([x, y]) => x === a || y === a).map(([x, y]) => (x === a ? y : x));
 
@@ -47,13 +50,14 @@
      opts: players (roster, with id/gender/badge/active), lines (this game's lines, in order),
      idx (which line), prevLines, keep (player ids already on the line; never moved),
      ratio { W, M } (default 3 W / 4 M), leaders per line (default 2), deep (Set of deep-deep ids
-     for this game), rookies (Set), apart and together (arrays of [id, id]), seed (string).
+     for this game), rookies (Set), apart and together (lists of { p, with: [ids] } or [id, id]),
+     seed (string).
      Returns { lineup: [{p, r}], notes: [string] }. */
   function planLine(o) {
     const ratio = o.ratio || { W: 3, M: 4 };
     const wantLeaders = o.leaders == null ? 2 : o.leaders;
     const deep = o.deep || new Set(), rookies = o.rookies || new Set();
-    const apart = o.apart || [], together = o.together || [];
+    const apart = toPairs(o.apart), together = toPairs(o.together);
     const rest = restBefore(o.lines, o.idx, o.prevLines);
     const next = o.lines[o.idx + 1], nextOn = new Set(((next && next.lineup) || []).map(s => s.p));
     const byId = new Map(o.players.map(p => [p.id, p]));
@@ -128,7 +132,7 @@
     return { behind: o.idx > 0 && w - m >= 0.5, w, m };
   }
 
-  const api = { restBefore, planLine, menBehind, playsOf, SLOTS };
+  const api = { restBefore, planLine, menBehind, playsOf, toPairs, SLOTS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.DBLines = api;
 })(typeof window !== "undefined" ? window : this);
