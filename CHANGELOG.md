@@ -5,6 +5,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 4, 2026
 
 **Test board**
+- **Edit lines.** In the game menu (⋯), "Edit lines" shows every line as a small tile. Tap tiles to select them and delete several at once (it asks once, and there's an Undo). Press and hold a tile, then drag it to move it; on a laptop just drag. Line and point numbers update as you go.
+- **Version number** in the top bar (like "v10"), and a short "Updated to v10" note the first time a phone opens a new version.
 - **Captain partners rotate.** Fill lines still sends out whichever captain or president has rested longest, but their partner is now the rested one they've played with least that day, instead of the same pairs coming back every third line. Over a day every pair plays together a few times. Captains still play about a third of lines, sometimes resting 1 or 3 lines instead of exactly 2.
 - **Who plays deep deep and short deep:** every line shows a small **DD** and **SD** tag next to the people it thinks should take those spots, worked out from the zone lists (main list first). It updates as you swap people, isn't saved, and shows "no DD" / "no SD" if nobody on the line can cover it.
 - **Fill lines sets roles:** up to 3 people from the Handlers list get **H**, everyone else **C**. Anyone you placed yourself keeps the role you gave them.

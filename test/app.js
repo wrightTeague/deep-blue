@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.9"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.10"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -225,6 +225,7 @@
 
   function render() {
     if (!S.team) return;
+    if (ui.drag) { ui.drag.pending = true; return; }   // never redraw under a finger mid-drag
     const app = $("#app");
     const active = document.activeElement;
     const keep = active && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
@@ -245,9 +246,10 @@
         </div>
         <nav class="tabs" aria-label="Sections">${tabsHTML}</nav>
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
+        <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^test\./, ""))}</span>
       </div></header>
       <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
-      ${ui.auto && ui.tab === "points" ? autoBar() : ui.clip && ui.tab === "points" ? clipBar() : ""}
+      ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
@@ -352,6 +354,7 @@
 
   function renderPoints() {
     const g = game(); if (!g) return noGame();
+    if (ui.editLines) return renderEditLines(g);
     const lines = gamePoints(g.id), st = computeStats(lines).team, now = nowPoint(lines);
     let next = 1;
     const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restFor(g, lines, i), now && now.line === i ? now.k : -1); }).join("");
@@ -670,6 +673,7 @@
       title = g ? esc(g.name) : "Games";
       body = `<div class="menu-list">
         ${g ? '<button data-act="fill-open"><b>Fill lines automatically</b></button>' : ""}
+        ${g && gamePoints(g.id).length ? '<button data-act="edit-lines"><b>Edit lines</b> (reorder or delete several)</button>' : ""}
         ${t ? `<button data-act="copy-game">Next game in ${esc(t.name)} (copy these lines)</button>
         <button data-act="new-game-tour">New empty game in ${esc(t.name)}</button>` : ""}
         <button data-act="new-game">New game</button>
@@ -864,6 +868,139 @@
     </section>`;
   }
 
+  // ---------- edit lines: select several to delete, press-and-hold to drag into a new order ----------
+  // ui.editLines = { sel: Set of line ids, confirm: bool }. ui.drag while a tile is being dragged.
+  function renderEditLines(g) {
+    const lines = gamePoints(g.id), sel = ui.editLines.sel;
+    let next = 1;
+    const tiles = lines.map((pt, i) => {
+      const n = playsOf(pt), from = next; next += n;
+      const o = outs(pt), played = o.some(x => x.result);
+      const res = o.map(x => `<i class="r ${x.result === "us" ? "us" : x.result === "them" ? "them" : ""}"></i>`).join("");
+      const names = (pt.lineup || []).map(x => { const p = P(x.p); return `<span class="${p?.gender || "U"}">${esc(label(p))}</span>`; }).join("");
+      return `<article class="etile${sel.has(pt.id) ? " sel" : ""}${played ? " played" : ""}" data-id="${pt.id}" data-plays="${n}" aria-pressed="${sel.has(pt.id)}" tabindex="0">
+        <div class="et-head"><b class="et-n">Line ${i + 1}</b><span class="et-pts">${n === 1 ? "Pt " + from : "Pts " + from + "–" + (from + n - 1)}</span><span class="et-check" aria-hidden="true"></span></div>
+        <div class="et-res">${res}${played ? '<span class="et-played">played</span>' : ""}</div>
+        <div class="et-names">${names || '<span class="muted">No players</span>'}</div>
+      </article>`;
+    }).join("");
+    return `<div class="game-head"><div><p class="eyebrow">Edit lines</p><h2 class="sec">${esc(g.name)}</h2></div></div>
+      <p class="muted edit-help">Tap lines to select them for deleting. Press and hold a line, then drag it to move it.</p>
+      <div class="egrid" id="egrid">${tiles}</div>`;
+  }
+  function editBar() {
+    const n = ui.editLines.sel.size, g = game();
+    const playedSel = n ? gamePoints(g.id).filter(pt => ui.editLines.sel.has(pt.id) && outs(pt).some(o => o.result)).length : 0;
+    const what = `${n} line${n === 1 ? "" : "s"}`;
+    return `<div class="clipbar editbar" role="status">
+      <span class="clip-text">${n ? `<b>${what} selected</b>${playedSel ? ` · ${playedSel} already played` : ""}` : "<b>Edit lines</b> Select lines or drag to reorder"}</span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap">
+        ${n ? `<button class="btn sm danger" data-act="edit-delete">${ui.editLines.confirm ? "Tap again to delete " + what : "Delete " + what}</button>` : ""}
+        <button class="btn sm primary" data-act="edit-done">Done</button>
+      </span></div>`;
+  }
+  function undoDelBar() {
+    return `<div class="clipbar" role="status"><span class="clip-text"><b>${esc(ui.undoDel.text)}</b></span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-act="undo-delete">Undo</button><button class="btn sm" data-act="undo-delete-done">Done</button></span></div>`;
+  }
+  async function deleteSelected() {
+    const g = game(); if (!g) return;
+    const before = gamePoints(g.id), ids = before.filter(pt => ui.editLines.sel.has(pt.id)).map(pt => pt.id);
+    if (!ids.length) return;
+    const rows = before.filter(pt => ids.includes(pt.id)).map(pt => JSON.parse(JSON.stringify(pt)));
+    ui.undoDel = { gid: g.id, rows, order: before.map(pt => pt.id), text: `Deleted ${ids.length} line${ids.length === 1 ? "" : "s"}.` };
+    ui.editLines = null; ui.swipe = null;
+    for (const id of ids) await save("app_delete_point", { p_id: id }, () => removeLocal("points", id));
+    const order = gamePoints(g.id).map(x => x.id);
+    await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+    render();
+  }
+  async function undoDelete() {
+    const u = ui.undoDel; if (!u) return; ui.undoDel = null;
+    for (const row of u.rows) await savePoint(row);
+    const order = u.order.filter(id => S.points.some(p => p.id === id));
+    await save("app_reorder_points", { p_game: u.gid, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+    render(); toast("Lines are back");
+  }
+  function saveOrder(order) {
+    const g = game(); if (!g) return;
+    save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+  }
+
+  // Dragging: a mouse drags once it moves a few pixels; a finger has to rest on the tile for a
+  // moment first, so a normal swipe still scrolls the page.
+  (function setupDrag() {
+    let press = null;   // { tile, id, x, y, timer, pointerId, touch }
+    const HOLD = 280, SLOP = 8;
+    const grid = () => document.getElementById("egrid");
+    function start() {
+      const t = press.tile, r = t.getBoundingClientRect();
+      ui.drag = { id: press.id, tile: t, dx: press.x - r.left, dy: press.y - r.top, pending: false };
+      t.style.transition = "none";
+      t.classList.add("dragging"); grid()?.classList.add("is-dragging");
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
+    }
+    // Keep the dragged tile under the finger: measure its slot without the offset, then offset it.
+    function place(x, y) {
+      const t = ui.drag.tile; t.style.transform = "";
+      const b = t.getBoundingClientRect();
+      t.style.transform = `translate(${x - ui.drag.dx - b.left}px, ${y - ui.drag.dy - b.top}px)`;
+    }
+    function moveTo(x, y) {
+      const d = ui.drag, gEl = grid(); if (!d || !gEl) return;
+      // Move the tile's slot to whichever tile the finger is over.
+      const over = [...gEl.children].find(el => { if (el === d.tile) return false; const b = el.getBoundingClientRect(); return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom; });
+      if (over) {
+        const kids = [...gEl.children], from = kids.indexOf(d.tile), to = kids.indexOf(over);
+        gEl.insertBefore(d.tile, from < to ? over.nextSibling : over);
+        let from1 = 1;
+        [...gEl.children].forEach((el, k) => {
+          const n = +el.dataset.plays || 1, nEl = el.querySelector(".et-n"), pEl = el.querySelector(".et-pts");
+          if (nEl) nEl.textContent = "Line " + (k + 1);
+          if (pEl) pEl.textContent = n === 1 ? "Pt " + from1 : "Pts " + from1 + "–" + (from1 + n - 1);
+          from1 += n;
+        });
+      }
+      place(x, y);
+      // Scroll the page when dragging near the top or bottom.
+      const edge = 80; if (y < edge + 60) window.scrollBy(0, -10); else if (y > window.innerHeight - edge - 70) window.scrollBy(0, 10);
+    }
+    function finish(cancel) {
+      const d = ui.drag; ui.drag = null; grid()?.classList.remove("is-dragging");
+      if (!d) return;
+      const gEl = grid(), order = gEl ? [...gEl.children].map(el => el.dataset.id) : [];
+      const g = game(), was = g ? gamePoints(g.id).map(p => p.id) : [];
+      if (!cancel && order.length && order.join() !== was.join()) saveOrder(order); else render();
+    }
+    document.addEventListener("pointerdown", e => {
+      const tile = e.target.closest && e.target.closest(".etile"); if (!tile || !ui.editLines || e.button > 0) return;
+      press = { tile, id: tile.dataset.id, x: e.clientX, y: e.clientY, pointerId: e.pointerId, touch: e.pointerType !== "mouse", moved: false, timer: null };
+      if (press.touch) press.timer = setTimeout(() => { if (press && !press.moved) start(); }, HOLD);
+    });
+    document.addEventListener("pointermove", e => {
+      if (!press || e.pointerId !== press.pointerId) return;
+      const far = Math.hypot(e.clientX - press.x, e.clientY - press.y) > SLOP;
+      if (!ui.drag) {
+        if (far && press.touch) { clearTimeout(press.timer); press.moved = true; return; }   // it's a scroll
+        if (far && !press.touch) start(); else return;
+      }
+      press.moved = true; moveTo(e.clientX, e.clientY);
+    });
+    // While dragging with a finger, stop the page from scrolling instead.
+    document.addEventListener("touchmove", e => { if (ui.drag) e.preventDefault(); }, { passive: false });
+    const up = e => {
+      if (!press || (e.pointerId != null && e.pointerId !== press.pointerId)) return;
+      clearTimeout(press.timer);
+      const p = press; press = null;
+      if (ui.drag) { finish(e.type === "pointercancel"); return; }
+      if (e.type === "pointerup" && !p.moved && ui.editLines) {   // a tap: select or unselect
+        const sel = ui.editLines.sel; sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); ui.editLines.confirm = false; render();
+      }
+    };
+    document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
+    document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest(".etile")) e.preventDefault(); });
+  })();
+
   // ---------- actions ----------
   function newPointAfter(srcPt, insertAfter) {
     const g = game(); if (!g) return;
@@ -971,6 +1108,11 @@
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
+    if (a === "edit-lines") { closeSheet(); ui.editLines = { sel: new Set(), confirm: false }; ui.undoDel = null; render(); window.scrollTo(0, 0); return; }
+    if (a === "edit-done") { ui.editLines = null; render(); return; }
+    if (a === "edit-delete") { if (!ui.editLines.confirm) { ui.editLines.confirm = true; render(); return; } deleteSelected(); return; }
+    if (a === "undo-delete") { undoDelete(); return; }
+    if (a === "undo-delete-done") { ui.undoDel = null; render(); return; }
     if (a === "fill-open") { openSheet({ type: "fill", n: 3, plays: 2, existing: true }); return; }
     if (a === "fill-n") { ui.sheet.n = +el.dataset.v; renderSheet(); return; }
     if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
@@ -1057,7 +1199,7 @@
 
   document.addEventListener("change", e => {
     const el = e.target;
-    if (el.id === "gameSel") { ui.swipe = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
+    if (el.id === "gameSel") { ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
     if (a === "o-with") { const g = ui.owner[el.dataset.k][+el.dataset.i]; if (el.value && !g.with.includes(el.value)) { g.with.push(el.value); saveOwner(); } return; }
@@ -1137,6 +1279,13 @@
   window.addEventListener("focus", () => { if (S.team) scheduleRefresh(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.team) scheduleRefresh(); });
   setInterval(() => { if (S.team && !document.hidden) scheduleRefresh(); }, 60000);
+
+  // Say so once when this phone has just moved onto a new version.
+  (function announceVersion() {
+    const seen = store.get("seenVersion", null);
+    if (seen && seen !== APP_VERSION) setTimeout(() => toast("Updated to v" + APP_VERSION.replace(/^test\./, "")), 900);
+    store.set("seenVersion", APP_VERSION);
+  })();
 
   // ---------- gate ----------
   function renderGate(msg) {
