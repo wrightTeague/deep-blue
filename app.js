@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.03.5"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.04.1"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -763,6 +763,9 @@
     if (e.target.id === "pickQ") { ui.sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const q = $("#pickQ"); q.focus(); try { q.setSelectionRange(pos, pos); } catch (er) {} }
     if (e.target.id === "rosterFilter") { ui.rosterFilter = e.target.value; render(); }
   });
+
+  // iPhones ignore the "no zoom" setting for pinches, so stop the pinch gesture itself.
+  ["gesturestart", "gesturechange"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 
   document.addEventListener("keydown", e => { if (e.key === "Escape" && ui.sheet) closeSheet(); });
 

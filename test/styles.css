@@ -16,6 +16,8 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
+/* No zooming: double-tap does nothing, and inputs don't zoom when tapped. */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--board);color:var(--ink);font-family:var(--print);font-size:17px;line-height:1.35;-webkit-tap-highlight-color:transparent}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -293,3 +295,10 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
   .points > .point,.points > .add-wrap{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always}
 }
 @media (max-width:759px){ .points{overflow-y:hidden} }
+/* who plays deep deep / short deep on each line (suggested) */
+.pos{flex:none;font-family:var(--print);font-size:12px;font-weight:700;letter-spacing:.04em;border-radius:4px;padding:1px 5px;line-height:1.3}
+.pos.dd{background:#ece4fa;color:var(--rP)}
+.pos.sd{background:#dcf1f5;color:#17707f}
+.nopos{color:var(--red);font-size:14px}
+.who .nm{flex:0 1 auto}
+.who-r{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}

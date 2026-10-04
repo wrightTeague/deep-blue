@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.7"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.8"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -389,6 +389,11 @@
   function lineCard(pt, i, from, rest, nowK) {
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
+    // Who the line maker thinks plays deep deep and short deep on this line (a suggestion, not saved).
+    const zs = zoneSets(), spots = DBLines.assignSpots(line.map(s => s.p), zs);
+    const listed = k => zs[k].main.size + zs[k].ok.size > 0;
+    const posTag = id => id === spots.deep ? '<span class="pos dd" title="Deep deep">DD</span>' : id === spots.short ? '<span class="pos sd" title="Short deep">SD</span>' : "";
+    const missing = line.length ? [listed("deep") && !spots.deep ? "no DD" : "", listed("short") && !spots.short ? "no SD" : ""].filter(Boolean) : [];
     const goals = new Map(), assists = new Map();
     o.forEach(x => { if (x.result === "us") { if (x.scorer) goals.set(x.scorer, (goals.get(x.scorer) || 0) + 1); if (x.assist && x.assist !== "none") assists.set(x.assist, (assists.get(x.assist) || 0) + 1); } });
     const slots = [];
@@ -402,7 +407,7 @@
         const restTag = sat === undefined ? "" : sat === null ? `<span class="rest">1st shift</span>` : sat === 0 ? `<span class="rest b2b">back to back</span>` : `<span class="rest">sat ${sat} pt${sat === 1 ? "" : "s"}</span>`;
         slots.push(`<li class="slot">
           <button class="role" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button>
-          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${ball}${restTag}</button>
+          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${posTag(s.p)}<span class="who-r">${ball}${restTag}</span></button>
         </li>`);
       } else {
         slots.push(`<li class="slot"><span class="role" aria-hidden="true"></span><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`);
@@ -444,7 +449,7 @@
       </div>
       <ul class="slots">${slots.join("")}</ul>
       <div class="point-foot">
-        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span></span>
+        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span>${missing.map(t => `<span class="nopos">${t}</span>`).join("")}</span>
         ${rows}
       </div>
     </article>`;
@@ -497,6 +502,8 @@
   // Zone spots belong to the team and carry across every tournament until someone changes them.
   // g is ignored (kept so callers read the same as before).
   const zoneOf = g => (S.team && S.team.zone) || {};
+  // Zone lists in the shape the line maker uses: { handlers: { main: Set, ok: Set }, deep, short }.
+  const zoneSets = () => { const z = zoneOf(); return Object.fromEntries(ZONES.map(([k]) => [k, { main: new Set(z[k] || []), ok: new Set(z[k + "_ok"] || []) }])); };
   function saveZone(fn) {
     const next = JSON.parse(JSON.stringify(zoneOf()));
     ZONES.forEach(([k]) => { next[k] = next[k] || []; next[k + "_ok"] = next[k + "_ok"] || []; });
@@ -759,7 +766,7 @@
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
         players: S.players, lines, idx: i, prevLines, keep, keepRoles, ratio,
-        positions: Object.fromEntries(ZONES.map(([k]) => [k, { main: new Set(zoneOf(g)[k] || []), ok: new Set(zoneOf(g)[k + "_ok"] || []) }])), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
+        positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
       });
       lines[i].lineup = r.lineup;
       r.notes.forEach(n => notes.push(`Line ${i + 1}: ${n}`));
@@ -1061,6 +1068,9 @@
     if (e.target.id === "pickQ") { ui.sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const q = $("#pickQ"); q.focus(); try { q.setSelectionRange(pos, pos); } catch (er) {} }
     if (e.target.id === "rosterFilter") { ui.rosterFilter = e.target.value; render(); }
   });
+
+  // iPhones ignore the "no zoom" setting for pinches, so stop the pinch gesture itself.
+  ["gesturestart", "gesturechange"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && ui.sheet) closeSheet();

@@ -143,10 +143,38 @@
     fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, "");
     fill(leaderPool, () => SLOTS - line.length, "H");
 
+    // Roles: when there's a Handlers list, its picks get H (up to 3) and everyone else C.
+    // Players you placed keep the role you gave them.
+    if (pos.handlers && ((pos.handlers.main && pos.handlers.main.size) || (pos.handlers.ok && pos.handlers.ok.size))) {
+      const keepSet = new Set(o.keep || []), picks = assignSpots(line.map(s => s.p), pos).handlers;
+      let h = line.filter(s => keepSet.has(s.p) && s.r === "H").length;
+      line.forEach(s => {
+        if (keepSet.has(s.p) && s.r) return;
+        s.r = picks.includes(s.p) && h < 3 ? (h++, "H") : "C";
+      });
+    }
     if (line.length < SLOTS) notes.push(`Only ${line.length} of ${SLOTS} spots could be filled.`);
     const tiredOn = line.filter(s => tired(byId.get(s.p))).map(s => s.p);
     if (tiredOn.length) notes.push("Back to back: " + tiredOn.length);
     return { lineup: line.slice(0, SLOTS), notes, tired: tiredOn };
+  }
+
+  // Who on a line would play which spot, from the zone lists (positions as in planLine).
+  // → { handlers: up to 3 ids, deep: id | null, short: id | null }. Deep and short are two
+  // different people; the main list beats the backup list. Zone spots are defense and
+  // handling is offense, so the same person can be a handler and the deep deep.
+  function assignSpots(ids, positions) {
+    const pos = positions || {};
+    const lvl = (k, id) => (pos[k] ? (pos[k].main && pos[k].main.has(id) ? 2 : pos[k].ok && pos[k].ok.has(id) ? 1 : 0) : 0);
+    const handlers = ids.map((id, i) => ({ id, i, l: lvl("handlers", id) })).filter(x => x.l).sort((a, b) => b.l - a.l || a.i - b.i).slice(0, 3).map(x => x.id);
+    const dC = [null, ...ids.filter(id => lvl("deep", id))], sC = [null, ...ids.filter(id => lvl("short", id))];
+    let best = { deep: null, short: null, score: -1 };
+    for (const d of dC) for (const sh of sC) {
+      if (d && sh && d === sh) continue;
+      const score = (d ? 10.5 + lvl("deep", d) : 0) + (sh ? 10 + lvl("short", sh) : 0);   // deep deep wins a tie
+      if (score > best.score) best = { deep: d, short: sh, score };
+    }
+    return { handlers, deep: best.deep, short: best.short };
   }
 
   // Are the men falling behind the women over the whole day? With 4 of the 6 leaders being
@@ -165,7 +193,7 @@
     return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
-  const api = { restBefore, planLine, menBehind, playsOf, toPairs, SLOTS };
+  const api = { restBefore, planLine, menBehind, assignSpots, playsOf, toPairs, SLOTS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.DBLines = api;
 })(typeof window !== "undefined" ? window : this);
