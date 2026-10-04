@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.8"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.9"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -765,7 +765,7 @@
       const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
-        players: S.players, lines, idx: i, prevLines, keep, keepRoles, ratio,
+        players: S.players, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio,
         positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
       });
       lines[i].lineup = r.lineup;

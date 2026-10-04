@@ -52,7 +52,7 @@
      ratio { W, M } (default 3 W / 4 M), leaders per line (default 2),
      positions ({ handlers, deep, short }, each { main: Set, ok: Set } for "can play it if
      needed"), deep (older single Set of deep deeps, used when positions has none), rookies (Set), apart and together (lists of { p, with: [ids] } or [id, id]),
-     seed (string).
+     seed (string), dayLines (earlier games today, for rotating leader partners).
      Returns { lineup: [{p, r}], notes: [string] }. */
   function planLine(o) {
     const ratio = o.ratio || { W: 3, M: 4 };
@@ -105,9 +105,26 @@
       }
     }
 
-    // 1. Two leaders (captains and president), whoever has rested longest.
+    // 1. Two leaders (captains and president). The one who has rested longest goes first;
+    //    their partner is the rested leader they've played with least today, so partners
+    //    rotate through the day instead of the same pairs coming back every third line.
     const leaderPool = active.filter(isLeader);
-    fill(leaderPool, () => wantLeaders - count(isLeader), "H");
+    const together2 = new Map();   // "a|b" → lines together today
+    const pk = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
+    const countIn = l => { const ids = (l.lineup || []).map(s => s.p).filter(id => byId.has(id) && isLeader(byId.get(id)));
+      for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) together2.set(pk(ids[x], ids[y]), (together2.get(pk(ids[x], ids[y])) || 0) + 1); };
+    (o.dayLines || []).forEach(game => (game || []).forEach(l => { if (resultsOf(l)) countIn(l); }));
+    for (let i = 0; i < o.idx; i++) countIn(o.lines[i]);
+    for (const strict of [true, false]) {
+      while (count(isLeader) < wantLeaders && line.length < SLOTS) {
+        const cands = order(leaderPool).filter(p => fits(p, strict));
+        if (!cands.length) break;
+        const on = line.map(s => s.p).filter(id => isLeader(byId.get(id)));
+        const seen = p => on.reduce((a, id) => a + (together2.get(pk(id, p.id)) || 0), 0);
+        const pick = on.length ? cands.map((p, k) => ({ p, k })).sort((a, b) => seen(a.p) - seen(b.p) || a.k - b.k)[0].p : cands[0];
+        add(pick, "H");
+      }
+    }
     // 2. Zone spots: at least 2 handlers, plus a deep deep and a short deep (two different
     //    people). The main list goes first; the "can play it if needed" list only when nobody
     //    on the main list fits. A spot with nobody listed is skipped.
@@ -130,8 +147,13 @@
     for (const [k, name, missing] of needs) {
       if (!pos[k] || !((pos[k].main && pos[k].main.size) || (pos[k].ok && pos[k].ok.size))) continue;
       const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
-      // Main list rested, then backups rested, then main list even if back to back, then backups.
-      for (const strict of [true, false]) for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
+      // Main list rested, then backups rested; a third captain only if no one else rested
+      // fits; then the same again allowing back to back.
+      const spare = p => !isLeader(p) || count(isLeader) < wantLeaders;
+      for (const strict of [true, false]) {
+        for (const pool of [main, ok]) if (missing() > 0) fill(pool.filter(spare), missing, "", [strict]);
+        for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
+      }
       if (missing() > 0) notes.push(k === "handlers" ? "Fewer than 2 handlers fit." : `No ${name} fits.`);
     }
     // Older single list of deep deeps (games outside a tournament).
