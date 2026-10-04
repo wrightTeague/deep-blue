@@ -2,6 +2,20 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 4, 2026 (afternoon): everything from the test board is now on the real board
+
+**Real board**
+- **Automatic line maker.** In the game menu (⋯), "Fill lines" plans new lines and fills empty spots; "Suggest players for the empty spots" in a line's menu does one line. Each line gets 2 captains or president, 3 women and 4 men, at least 2 handlers, a deep deep and a short deep, and nobody back to back. Everyone else goes by who has sat the most lines and played the fewest, carrying over from earlier games that day. Players you placed stay put, lines with results are never touched, and there's an Undo.
+- **Choose how captains pair up** in Fill lines: Rotate, Mostly usual, or Same pairs.
+- **5 men / 2 women popup** when the men fall a point behind over the day.
+- **Fill lines sets roles:** up to 3 handlers get H, everyone else C.
+- **Zone spots moved to the Roster tab:** Handlers, Deep deep and Short deep, each with a "can play it if needed" list, the same for every tournament. The Zone tab is gone (anyone can play cup).
+- **DD / SD tags** on every line show who'd take deep deep and short deep, with a warning if nobody on the line can.
+- **Swipe between lines on phones**, with "Line 3 of 7", dots and arrows. Opens on the line we're on and slides on once a line is finished.
+- **NOW marker** on the first point without a result, and a "Now: Pt 7" button that jumps to it.
+- **Edit lines** (game menu): select several lines to delete at once (with Undo), or press and hold a line and drag it to reorder.
+- **Version number** in the top bar, and a short "Updated" note when a phone gets a new version.
+
 ## Oct 4, 2026
 
 **Test board**

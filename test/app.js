@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.11"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.12"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -247,7 +247,7 @@
         </div>
         <nav class="tabs" aria-label="Sections">${tabsHTML}</nav>
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
-        <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^test\./, ""))}</span>
+        <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
       </div></header>
       <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
@@ -746,7 +746,7 @@
       <div class="sheet-body">${body}</div></div></div>`;
   }
 
-  // ---------- line maker (test board) ----------
+  // ---------- line maker ----------
   // Fills lines with DBLines.planLine (lines.js). opts: { only: lineId } for one line, or
   // { newLines, plays, existing } for the game. Never touches lines that have a result or
   // players already placed. Keeps what it changed so Undo can put it back.
@@ -1291,7 +1291,7 @@
   // Say so once when this phone has just moved onto a new version.
   (function announceVersion() {
     const seen = store.get("seenVersion", null);
-    if (seen && seen !== APP_VERSION) setTimeout(() => toast("Updated to v" + APP_VERSION.replace(/^test\./, "")), 900);
+    if (seen && seen !== APP_VERSION) setTimeout(() => toast("Updated to v" + APP_VERSION.replace(/^(test\.|\d{4}\.)/, "")), 900);
     store.set("seenVersion", APP_VERSION);
   })();
 

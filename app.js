@@ -6,13 +6,14 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.04.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.04.2"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
   const BADGES = ["", "C", "P"];
   const BADGE_NAME = { C: "Captain", P: "President" };
-  const ZONES = [["deep", "Deep deep"], ["cup", "Cup"], ["short", "Short deep"]];
+  const ZONES = [["handlers", "Handlers"], ["deep", "Deep deep"], ["short", "Short deep"]];   // each also has a "<key>_ok" list: can play it if needed
+  const zoneName = k => { const ok = /_ok$/.test(k), z = ZONES.find(x => x[0] === k.replace(/_ok$/, "")); return z ? z[1] + (ok ? " (if needed)" : "") : ""; };
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const TOKEN = (new URLSearchParams(location.search).get("t") || "").trim();
@@ -34,12 +35,16 @@
 
   // ---------- state ----------
   let CODE = store.get("code", "");
+  let OWNER = store.get("owner", "");  // private settings code, only on this device
   let S = { team: null, tournaments: [], players: [], games: [], points: [] };
-  const ui = { tab: store.get("tab", "points"), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
+  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "points"))), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
   ui.undo = null;                      // { id, lineup } for the last paste
+  ui.owner = null;                     // { rookies, apart, together } once unlocked with the private code
+  ui.auto = null;                      // last auto-fill, for Undo: { changed:[{id,lineup}], created:[id], text }
+  ui.pairing = store.get("pairing", "rotate");   // Fill lines captain pairs: "rotate", "usual" or "rest"
   ui.pickSort = store.get("pickSort", "sat"); // player picker order for lines: "sat" (most lines sat first), "played" (fewest lines first) or "az"
 
   const P = id => S.players.find(p => p.id === id);
@@ -75,7 +80,7 @@
       S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [] };
       store.set("cache", S);
       if (!game()) ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null;
-      if (first) connect();
+      if (first) { connect(); if (OWNER) loadOwner(); }
       render();
       return true;
     } catch (e) {
@@ -179,6 +184,12 @@
   }
   // The game played just before g on the same day of the same tournament (games come back in play
   // order). Resting carries over from it, so the first line of a game knows who just came off.
+  // Every game played earlier the same day in the same tournament, in order.
+  function dayGamesBefore(g) {
+    if (!g) return [];
+    const i = S.games.findIndex(x => x.id === g.id);
+    return S.games.slice(0, Math.max(i, 0)).filter(p => (p.tournament_id || null) === (g.tournament_id || null) && (p.game_date || null) === (g.game_date || null));
+  }
   function prevGameOf(g) {
     if (!g) return null;
     const i = S.games.findIndex(x => x.id === g.id), p = i > 0 ? S.games[i - 1] : null;
@@ -210,10 +221,11 @@
   const restFor = (g, lines, idx) => { const pg = prevGameOf(g); return restBefore(lines, idx, pg ? gamePoints(pg.id) : null); };
 
   // ---------- render: shell ----------
-  const TABS = [["points", "Points"], ["zone", "Zone"], ["stats", "Stats"], ["roster", "Roster"]];
+  const TABS = [["points", "Points"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
 
   function render() {
     if (!S.team) return;
+    if (ui.drag) { ui.drag.pending = true; return; }   // never redraw under a finger mid-drag
     const app = $("#app");
     const active = document.activeElement;
     const keep = active && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
@@ -222,6 +234,9 @@
     const loose = S.games.filter(g => !tourOf(g));
     const gameOpts = tours().map(t => { const gs = S.games.filter(g => g.tournament_id === t.id); return gs.length ? `<optgroup label="${esc(t.name)}">${gs.map(g => opt(g, false)).join("")}</optgroup>` : ""; }).join("")
       + (loose.length ? (tours().length ? `<optgroup label="Other games">${loose.map(g => opt(g, true)).join("")}</optgroup>` : loose.map(g => opt(g, true)).join("")) : "");
+    // Mid-swipe redraws (every save redraws) keep the line the swipe has reached.
+    const oldTrack = trackOf();
+    if (oldTrack && ui.swipe && ui.swipe.game === ui.gameId && swipeMode()) { const st = cardStep(oldTrack); if (st > 0) ui.swipe.i = clampLine(oldTrack, oldTrack.scrollLeft / st); }
     app.innerHTML = `
       <header class="top"><div class="top-in">
         <p class="brand">Deep Blue</p>
@@ -231,12 +246,87 @@
         </div>
         <nav class="tabs" aria-label="Sections">${tabsHTML}</nav>
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
+        <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
       </div></header>
-      <main id="main">${ui.tab === "zone" ? renderZone() : ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
-      ${ui.clip && ui.tab === "points" ? clipBar() : ""}
+      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
+      ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
+    if (ui.tab === "points") afterPoints();
+  }
+
+  // ---------- phone swipe between lines ----------
+  // ui.swipe = { game, i }: which card each phone is looking at, kept across re-renders (every
+  // save re-draws the page). A new game opens on the NOW line. After a line is finished
+  // (ui.advanceTo set by the result / assist taps) it slides on to the next one.
+  function trackOf() { return document.getElementById("pointsTrack"); }
+  function cardStep(t) { const c = t.children[0]; if (!c) return 0; const gap = parseFloat(getComputedStyle(t).columnGap) || 0; return c.getBoundingClientRect().width + gap; }
+  function clampLine(t, i) { const n = t.children.length - 1; return Number.isFinite(i) ? Math.max(0, Math.min(Math.round(i), n)) : 0; }
+  function showLine(i, smooth) {
+    const t = trackOf(); if (!t) return;
+    i = clampLine(t, i);
+    ui.swipe = { game: ui.gameId, i };
+    const step = cardStep(t);
+    if (swipeMode() && step > 0) t.scrollTo({ left: i * step, behavior: smooth ? "smooth" : "instant" });
+    paintPager(i, i);
+  }
+  // i = the line being shown; pos = exact swipe position (e.g. 2.4 while moving from line 3 to 4).
+  // Runs every frame while swiping, so the dots, "Line X of Y" and the height keep up.
+  function paintPager(i, pos) {
+    const t = trackOf(); if (!t) return;
+    const kids = t.children, n = kids.length - 1;
+    if (swipeMode()) {
+      // Tall enough for both lines in view mid-swipe, so nothing below shows over them.
+      const a = kids[clampLine(t, Math.floor(pos))], b = kids[clampLine(t, Math.ceil(pos))];
+      const h = Math.max(a ? a.offsetHeight : 0, b ? b.offsetHeight : 0);
+      t.style.height = h ? (h + 12) + "px" : "";
+    } else t.style.height = "";
+    if (paintPager.track === t && paintPager.last === i) return;
+    paintPager.track = t; paintPager.last = i;
+    const txt = document.getElementById("pagerText");
+    if (txt) txt.textContent = i >= n ? "New line" : `Line ${i + 1} of ${n}`;
+    document.querySelectorAll("#lineDots .dot").forEach((d, k) => d.setAttribute("aria-current", k === i ? "true" : "false"));
+  }
+  function afterPoints() {
+    const t = trackOf(); if (!t) return;
+    const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--top-h", top.offsetHeight + "px");
+    const g = game(), lines = g ? gamePoints(g.id) : [], now = nowPoint(lines);
+    if (!ui.swipe || ui.swipe.game !== ui.gameId || !Number.isFinite(ui.swipe.i)) ui.swipe = { game: ui.gameId, i: now ? now.line : Math.max(lines.length - 1, 0) };
+    showLine(ui.swipe.i, false);
+    if (ui.advanceTo != null) { const to = ui.advanceTo; ui.advanceTo = null; if (swipeMode()) setTimeout(() => { showLine(to, true); setTimeout(nowRowToMiddle, 350); }, 700); }
+    let raf = 0;
+    t.addEventListener("scroll", () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!t.isConnected || !swipeMode()) return;   // this copy was replaced by a redraw
+        const step = cardStep(t); if (!(step > 0)) return;
+        const pos = t.scrollLeft / step, i = clampLine(t, pos);
+        ui.swipe = { game: ui.gameId, i };
+        paintPager(i, pos);
+      });
+    }, { passive: true });
+  }
+  // Scroll the page (up or down only) so the NOW row sits in the middle of the screen.
+  function nowRowToMiddle() {
+    const r = document.getElementById("nowRow"); if (!r) return;
+    const box = r.getBoundingClientRect();
+    window.scrollTo({ top: Math.max(0, window.scrollY + box.top - (window.innerHeight - box.height) / 2), behavior: "smooth" });
+  }
+  function jumpNow() {
+    const g = game(), now = g ? nowPoint(gamePoints(g.id)) : null; if (!now) return;
+    if (swipeMode()) { showLine(now.line, true); setTimeout(nowRowToMiddle, 350); }
+    else nowRowToMiddle();
+  }
+  // Call before a tap that may finish a line; call the returned function after it.
+  function watchFinish(lineId) {
+    const before = S.points.find(x => x.id === lineId), was = before ? lineFinished(before) : true;
+    return () => {
+      const pt = S.points.find(x => x.id === lineId); if (!pt || was || !lineFinished(pt)) return;
+      const i = gamePoints(pt.game_id).findIndex(x => x.id === lineId);
+      ui.advanceTo = i + 1; render();
+    };
   }
 
   function fmtDate(d) {
@@ -250,11 +340,25 @@
   }
 
   // ---------- render: points ----------
+  // The point we're on: the first point in the game without a result.
+  // → { line: index, k: point within the line, n: point number } or null when every point has one.
+  function nowPoint(lines) {
+    let n = 0;
+    for (let i = 0; i < lines.length; i++) { const o = outs(lines[i]); for (let k = 0; k < o.length; k++) { n++; if (!o[k].result) return { line: i, k, n }; } }
+    return null;
+  }
+  // A line is finished once every point has a result and every goal has its scorer and assist.
+  const lineFinished = pt => outs(pt).every(o => o.result && (o.result !== "us" || (o.scorer && o.assist)));
+  // Phones show one line at a time and swipe sideways; laptops keep the grid.
+  const swipeMode = () => matchMedia("(max-width:759px)").matches;
+
   function renderPoints() {
     const g = game(); if (!g) return noGame();
-    const lines = gamePoints(g.id), st = computeStats(lines).team;
+    if (ui.editLines) return renderEditLines(g);
+    const lines = gamePoints(g.id), st = computeStats(lines).team, now = nowPoint(lines);
     let next = 1;
-    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restFor(g, lines, i)); }).join("");
+    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restFor(g, lines, i), now && now.line === i ? now.k : -1); }).join("");
+    const total = lines.length + 1, dots = Array.from({ length: total }, (_, i) => `<button class="dot${i === lines.length ? " add" : ""}${now && now.line === i ? " now" : ""}" data-act="go-line" data-i="${i}" aria-label="${i === lines.length ? "Add a line" : "Line " + (i + 1)}"></button>`).join("");
     return `
       <div class="game-head">
         <div>${tourOf(g) ? `<p class="eyebrow">${esc(tourOf(g).name)}${g.game_date ? " · " + fmtDate(g.game_date) : ""}</p>` : ""}<h2 class="sec">${esc(g.name)}</h2></div>
@@ -265,7 +369,12 @@
         <span class="row" style="gap:5px"><span class="role" data-r="C">C</span>Cut</span>
         <span>Tap a letter to change a role, a name to swap.</span>
       </div>
-      <div class="points">${cards}<div class="add-wrap"><button class="add-point" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="add-point paste" data-act="paste-new">+ Paste as new line</button>' : ""}</div></div>
+      <div class="line-nav">
+        <div class="pager"><button class="icon-btn" data-act="go-line" data-dir="-1" aria-label="Previous line">‹</button><span class="pager-text" id="pagerText">Line 1 of ${lines.length}</span><button class="icon-btn" data-act="go-line" data-dir="1" aria-label="Next line">›</button></div>
+        ${now ? `<button class="now-btn" data-act="jump-now">Now: Pt ${now.n}</button>` : (lines.length ? `<span class="now-done">Every point has a result</span>` : "")}
+        <div class="dots" id="lineDots">${dots}</div>
+      </div>
+      <div class="points" id="pointsTrack">${cards}<div class="add-wrap"><button class="add-point" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="add-point paste" data-act="paste-new">+ Paste as new line</button>' : ""}</div></div>
       ${pointsChart(lines)}`;
   }
 
@@ -280,9 +389,14 @@
     </div>`;
   }
 
-  function lineCard(pt, i, from, rest) {
+  function lineCard(pt, i, from, rest, nowK) {
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
+    // Who the line maker thinks plays deep deep and short deep on this line (a suggestion, not saved).
+    const zs = zoneSets(), spots = DBLines.assignSpots(line.map(s => s.p), zs);
+    const listed = k => zs[k].main.size + zs[k].ok.size > 0;
+    const posTag = id => id === spots.deep ? '<span class="pos dd" title="Deep deep">DD</span>' : id === spots.short ? '<span class="pos sd" title="Short deep">SD</span>' : "";
+    const missing = line.length ? [listed("deep") && !spots.deep ? "no DD" : "", listed("short") && !spots.short ? "no SD" : ""].filter(Boolean) : [];
     const goals = new Map(), assists = new Map();
     o.forEach(x => { if (x.result === "us") { if (x.scorer) goals.set(x.scorer, (goals.get(x.scorer) || 0) + 1); if (x.assist && x.assist !== "none") assists.set(x.assist, (assists.get(x.assist) || 0) + 1); } });
     const slots = [];
@@ -296,7 +410,7 @@
         const restTag = sat === undefined ? "" : sat === null ? `<span class="rest">1st shift</span>` : sat === 0 ? `<span class="rest b2b">back to back</span>` : `<span class="rest">sat ${sat} pt${sat === 1 ? "" : "s"}</span>`;
         slots.push(`<li class="slot">
           <button class="role" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button>
-          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${ball}${restTag}</button>
+          <button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${posTag(s.p)}<span class="who-r">${ball}${restTag}</span></button>
         </li>`);
       } else {
         slots.push(`<li class="slot"><span class="role" aria-hidden="true"></span><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`);
@@ -312,9 +426,9 @@
     };
     const rows = o.map((x, k) => {
       const tag = outcomeTag(x);
-      return `<div class="pt-row">
+      return `<div class="pt-row${k === nowK ? " now" : ""}"${k === nowK ? ' id="nowRow"' : ""}>
         <div class="pt-line">
-          <span class="pt-n">Pt ${from + k}</span>
+          ${k === nowK ? '<span class="now-pill">NOW</span>' : ""}<span class="pt-n">Pt ${from + k}</span>
           <div class="seg" role="group" aria-label="Point ${from + k}: start on offense or defense">
             <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="O" aria-pressed="${x.start_on === "O"}">O</button>
             <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="D" aria-pressed="${x.start_on === "D"}">D</button>
@@ -329,7 +443,7 @@
       </div>`;
     }).join("");
     const done = o.every(x => x.result);
-    return `<article class="point ${done ? "done" : ""}">
+    return `<article class="point ${done ? "done" : ""}${nowK >= 0 ? " current" : ""}" data-line="${i}">
       <div class="point-head">
         <h3>Line ${i + 1}</h3>
         <span class="tag">${n === 1 ? "Pt " + from : "Pts " + from + "–" + to}</span>
@@ -338,7 +452,7 @@
       </div>
       <ul class="slots">${slots.join("")}</ul>
       <div class="point-foot">
-        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span></span>
+        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span>${missing.map(t => `<span class="nopos">${t}</span>`).join("")}</span>
         ${rows}
       </div>
     </article>`;
@@ -387,16 +501,27 @@
     </section>`;
   }
 
-  // ---------- render: zone ----------
+  // ---------- zone spots ----------
+  // Zone spots belong to the team and carry across every tournament until someone changes them.
+  // g is ignored (kept so callers read the same as before).
+  const zoneOf = g => (S.team && S.team.zone) || {};
+  // Zone lists in the shape the line maker uses: { handlers: { main: Set, ok: Set }, deep, short }.
+  const zoneSets = () => { const z = zoneOf(); return Object.fromEntries(ZONES.map(([k]) => [k, { main: new Set(z[k] || []), ok: new Set(z[k + "_ok"] || []) }])); };
+  function saveZone(fn) {
+    const next = JSON.parse(JSON.stringify(zoneOf()));
+    ZONES.forEach(([k]) => { next[k] = next[k] || []; next[k + "_ok"] = next[k + "_ok"] || []; });
+    fn(next);
+    save("app_save_team_zone", { z: next }, () => { S.team.zone = next; });
+  }
   function renderZone() {
-    const g = game(); if (!g) return noGame();
-    const z = g.zone || {};
-    const cols = ZONES.map(([k, t]) => {
-      const ids = z[k] || [];
-      const chips = ids.map((id, i) => { const p = P(id); return `<div class="chip"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${t}">×</button></div>`; }).join("");
-      return `<section class="zone-col"><h3>${t}</h3>${chips || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button></section>`;
-    }).join("");
-    return `<h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">For ${esc(g.name)}.</p><div class="zone-grid">${cols}</div>`;
+    const z = zoneOf();
+    const chips = (k, name) => (z[k] || []).map((id, i) => { const p = P(id); return `<div class="chip${/_ok$/.test(k) ? " backup" : ""}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${name}">×</button></div>`; }).join("");
+    const cols = ZONES.map(([k, name]) => `<section class="zone-col"><h3>${name}</h3>
+        ${chips(k, name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button>
+        <h4 class="zone-ok">Can play it if needed</h4>
+        ${chips(k + "_ok", name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm ghost" data-act="zone-add" data-z="${k}_ok" style="align-self:flex-start">+ Add backup</button>
+      </section>`).join("");
+    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">The same for every game and tournament until you change them. The line maker gives every line 2 handlers, a deep deep and a short deep, using backups only when nobody on the main list fits. Anyone can play cup.</p><div class="zone-grid">${cols}</div></section>`;
   }
 
   // ---------- render: stats ----------
@@ -456,9 +581,11 @@
         <div class="seg" role="group" aria-label="Matchup"><button type="button" data-act="add-g" data-v="W" aria-pressed="${ui.addG === "W"}">W</button><button type="button" data-act="add-g" data-v="M" aria-pressed="${ui.addG !== "W"}">M</button></div>
         <button class="btn primary sm" type="submit">Add</button>
       </form>
-      <input class="line-in" id="rosterFilter" placeholder="Search roster" value="${esc(ui.rosterFilter)}" style="width:100%;max-width:340px">
+      <input class="line-in" id="rosterFilter" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search roster" value="${esc(ui.rosterFilter)}" style="width:100%;max-width:340px">
       <p class="muted" style="font-size:14px;margin:8px 0 0">The nickname is what shows on line cards. Tap the dot to mark a captain (C) or president (P). "Out" hides someone from the player picker without deleting their stats.</p>
       <div class="roster-cols">${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}</div>
+      ${renderZone()}
+      ${privateCard()}
       <div class="settings">
         <div class="card">
           <h3>Share the board</h3>
@@ -480,7 +607,7 @@
 
   // ---------- sheets (picker, menus, forms) ----------
   function openSheet(s) { ui.sheet = s; renderSheet(); setTimeout(() => { const f = $("#sheet-root [autofocus]"); if (f && matchMedia("(min-width:760px)").matches) f.focus(); }, 30); }
-  function closeSheet() { ui.sheet = null; renderSheet(); }
+  function closeSheet() { const s = ui.sheet; ui.sheet = null; renderSheet(); if (s && s.type === "ratio" && s.resolve) s.resolve("keep"); }
 
   function renderSheet() {
     const root = $("#sheet-root"), s = ui.sheet;
@@ -491,7 +618,8 @@
       const planned = plannedPoints(pts);
       let taken = new Set();
       if (s.pointId) { const pt = S.points.find(x => x.id === s.pointId); (pt?.lineup || []).forEach(x => taken.add(x.p)); }
-      if (s.zone) taken = new Set((g?.zone?.[s.zone]) || []);
+      const zMain = s.zone ? s.zone.replace(/_ok$/, "") : "";
+      if (s.zone) taken = new Set([...(zoneOf(g)[zMain] || []), ...(zoneOf(g)[zMain + "_ok"] || [])]);
       const q = (s.q || "").toLowerCase(), f = s.f || "";
       // Picking for a line (not a zone): show how long each person has sat and how many lines
       // they've played, and sort by either, once there's an earlier line or game to go on.
@@ -513,10 +641,10 @@
         const sat = v.pts === 0 ? `<span class="rest b2b">just played</span>` : `sat ${plural(v.lines, "line")} (${plural(v.pts, "pt")})`;
         return `${sat} · ${plural(v.played, "line")} played`;
       };
-      const meta = p => taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
+      const meta = p => s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
       const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
-      title = s.zone ? "Add to " + (ZONES.find(z => z[0] === s.zone) || [0, ""])[1] : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
+      title = s.zone ? "Add to " + zoneName(s.zone) : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
       tools = `<input class="line-in" id="pickQ" placeholder="Search" value="${esc(s.q || "")}" autofocus autocomplete="off">
         <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>
         ${rest ? `<div class="seg" role="group" aria-label="Sort">${[["sat", "Lines sat"], ["played", "Lines played"], ["az", "A–Z"]].map(([v, t]) => `<button data-act="pick-sort" data-v="${v}" aria-pressed="${sortBy === v}">${t}</button>`).join("")}</div>` : ""}`;
@@ -530,6 +658,7 @@
         <div class="row" style="padding:6px 12px 10px;gap:12px"><span>Plays</span>
           <div class="seg" role="group" aria-label="Points this line plays">${[1, 2, 3, 4].map(v => `<button data-act="pm-plays" data-v="${v}" aria-pressed="${cur === v}">${v}</button>`).join("")}</div>
           <span class="muted">point${cur === 1 ? "" : "s"}</span></div>
+        ${pts[i] && !outs(pts[i]).some(o => o.result) && (pts[i].lineup || []).length < SLOTS ? '<button data-act="pm-suggest"><b>Suggest players for the empty spots</b></button>' : ""}
         <button data-act="pm-copy">Copy players (to paste into other lines or games)</button>
         <button data-act="pm-dup">Duplicate this line at the end</button>
         <button data-act="pm-insert">Insert a copy right after this line</button>
@@ -543,6 +672,8 @@
       const g = game(), t = tourOf(g);
       title = g ? esc(g.name) : "Games";
       body = `<div class="menu-list">
+        ${g ? '<button data-act="fill-open"><b>Fill lines automatically</b></button>' : ""}
+        ${g && gamePoints(g.id).length ? '<button data-act="edit-lines"><b>Edit lines</b> (reorder or delete several)</button>' : ""}
         ${t ? `<button data-act="copy-game">Next game in ${esc(t.name)} (copy these lines)</button>
         <button data-act="new-game-tour">New empty game in ${esc(t.name)}</button>` : ""}
         <button data-act="new-game">New game</button>
@@ -566,6 +697,38 @@
         <label>Date<input class="line-in" id="gDate" type="date" value="${esc(date)}"></label>
         <div class="row"><button class="btn primary" type="submit">${g ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
       </form>`;
+    } else if (s.type === "fill") {
+      const g = game(), zz = zoneOf(g), zoneSet = ZONES.some(([k]) => (zz[k] || []).length || (zz[k + "_ok"] || []).length);
+      title = "Fill lines";
+      body = `<div class="form">
+        <div class="row" style="gap:10px"><span>Add</span>
+          <div class="seg" role="group" aria-label="New lines">${[0, 1, 2, 3, 4, 6].map(v => `<button data-act="fill-n" data-v="${v}" aria-pressed="${s.n === v}">${v}</button>`).join("")}</div><span>new lines</span></div>
+        <div class="row" style="gap:10px"><span>Each plays</span>
+          <div class="seg" role="group" aria-label="Points per new line">${[1, 2, 3].map(v => `<button data-act="fill-plays" data-v="${v}" aria-pressed="${s.plays === v}">${v}</button>`).join("")}</div><span>point${s.plays === 1 ? "" : "s"}</span></div>
+        <div class="fill-pair"><span>Captain pairs</span>
+          <div class="seg" role="group" aria-label="Captain pairs">${[["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]].map(([v, t]) => `<button data-act="fill-pairing" data-v="${v}" aria-pressed="${ui.pairing === v}">${t}</button>`).join("")}</div>
+          <p class="muted fill-pair-note">${ui.pairing === "rotate" ? "Each captain goes out with whoever they've played with least today, so everyone plays with everyone."
+            : ui.pairing === "usual" ? (() => { const up = DBLines.usualPairs(S.players, S.points); return up.length ? `Usual pairs two rounds out of three, then a mixed round: ${up.map(([a, b]) => esc(label(P(a))) + " + " + esc(label(P(b)))).join(" · ")}.` : "No usual pairs yet. Once captains have played together a few times, they'll show here."; })()
+            : "Whoever has rested longest goes out together, so the same pairs tend to come back every few lines."}</p>
+        </div>
+        <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
+        <ul class="fill-rules">
+          <li>2 captains or president per line, whoever has rested longest goes first</li>
+          <li>3 women and 4 men (asks first if the men fall a point behind over the day)</li>
+          <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
+          <li>Nobody back to back, people out are skipped</li>
+          ${ui.owner ? "<li>Using your private settings</li>" : ""}
+          <li>Players you've already placed stay put. Lines with results aren't touched.</li>
+        </ul>
+        <div class="row"><button class="btn primary" data-act="fill-go">Fill</button><button class="btn ghost" data-act="close">Cancel</button></div>
+      </div>`;
+    } else if (s.type === "ratio") {
+      title = "Men are sitting longer";
+      body = `<div class="form">
+        <p style="margin:0">So far today, not counting captains and president, men have played <b>${s.m.toFixed(1)} points</b> on average and women <b>${s.w.toFixed(1)}</b>.</p>
+        <p style="margin:0">Make Line ${s.lineNo} <b>5 men / 2 women</b> to catch up?</p>
+        <div class="row"><button class="btn primary" data-act="ratio-five">Yes, 5 men / 2 women</button><button class="btn" data-act="ratio-keep">Keep 4 men / 3 women</button></div>
+      </div>`;
     } else if (s.type === "tour-form") {
       const t = s.id ? tours().find(x => x.id === s.id) : null;
       title = t ? "Rename tournament" : "New tournament";
@@ -581,6 +744,268 @@
       ${tools ? `<div class="sheet-tools">${tools}</div>` : ""}
       <div class="sheet-body">${body}</div></div></div>`;
   }
+
+  // ---------- line maker ----------
+  // Fills lines with DBLines.planLine (lines.js). opts: { only: lineId } for one line, or
+  // { newLines, plays, existing } for the game. Never touches lines that have a result or
+  // players already placed. Keeps what it changed so Undo can put it back.
+  function askRatio(lineNo, mb) {
+    return new Promise(resolve => openSheet({ type: "ratio", lineNo, w: mb.w, m: mb.m, resolve }));
+  }
+  async function autoFill(opts) {
+    const g = game(); if (!g) return;
+    const pg = prevGameOf(g), prevLines = pg ? gamePoints(pg.id) : null;
+    const lines = gamePoints(g.id).map(x => JSON.parse(JSON.stringify(x)));
+    const played = pt => outs(pt).some(o => o.result);
+    const before = new Map(lines.map(x => [x.id, (x.lineup || []).map(s => ({ ...s }))]));
+    let targets = [];
+    if (opts.only) targets = lines.map((x, i) => i).filter(i => lines[i].id === opts.only && !played(lines[i]));
+    else {
+      if (opts.existing) targets = lines.map((x, i) => i).filter(i => !played(lines[i]) && (lines[i].lineup || []).length < SLOTS && !lines.slice(i + 1).some(played));
+      for (let k = 0; k < (opts.newLines || 0); k++) {
+        lines.push({ id: uid(), game_id: g.id, pos: lines.length + 1, lineup: [], plays: opts.plays || 2, outcomes: [], note: "" });
+        targets.push(lines.length - 1);
+      }
+    }
+    if (!targets.length) { toast("Nothing to fill: every line is full or already played."); return; }
+    const o = ui.owner || { rookies: [], apart: [], together: [] };
+    const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id)), usualPairs = DBLines.usualPairs(S.players, S.points);
+    for (const i of targets) {
+      const mb = DBLines.menBehind({ players: S.players, lines, idx: i, dayLines });
+      const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
+      const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
+      const r = DBLines.planLine({
+        players: S.players, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, pairing: ui.pairing, usualPairs,
+        positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
+      });
+      lines[i].lineup = r.lineup;
+      r.notes.forEach(n => notes.push(`Line ${i + 1}: ${n}`));
+    }
+    const created = [], changed = [];
+    for (const i of targets) {
+      const x = lines[i];
+      if (before.has(x.id)) { changed.push({ id: x.id, lineup: before.get(x.id) }); const cur = S.points.find(p => p.id === x.id); await savePoint({ ...cur, lineup: x.lineup }); }
+      else { created.push(x.id); await savePoint(x); }
+    }
+    const first = Math.min(...targets) + 1, last = Math.max(...targets) + 1;
+    ui.auto = { changed, created, text: `Filled ${first === last ? "Line " + first : "Lines " + first + "–" + last}.`, notes };
+    render();
+    setTimeout(() => {
+      if (swipeMode()) { showLine(first - 1, true); trackOf()?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+      else document.querySelectorAll(".point")[first - 1]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 60);
+  }
+  async function undoAuto() {
+    const u = ui.auto; if (!u) return; ui.auto = null;
+    for (const c of u.changed) { const cur = S.points.find(p => p.id === c.id); if (cur) await savePoint({ ...cur, lineup: c.lineup }); }
+    for (const id of u.created) await save("app_delete_point", { p_id: id }, () => removeLocal("points", id));
+    const g = game(); if (g && u.created.length) { const order = gamePoints(g.id).map(x => x.id); await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { S.points.find(p => p.id === x).pos = i + 1; })); }
+    render(); toast("Undone");
+  }
+  function autoBar() {
+    const u = ui.auto;
+    return `<div class="clipbar" role="status">
+      <span class="clip-text"><b>${esc(u.text)}</b> ${u.notes.length ? esc(u.notes.join(" · ")) : "Swap anyone you want."}</span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-act="auto-undo">Undo</button><button class="btn sm" data-act="auto-done">Done</button></span>
+    </div>`;
+  }
+
+  // ---------- private settings (only whoever has the private code) ----------
+  // Private settings have no visible way in. Typing the private code into "Search roster" and
+  // pressing Enter / Go tries it quietly: a wrong code just leaves the search as it was.
+  async function loadOwner() {
+    try {
+      const d = await sb.rpc("app_owner_load", { p_token: TOKEN, p_code: CODE, p_owner: OWNER });
+      if (d.error) throw d.error;
+      ui.owner = { rookies: d.data.rookies || [], apart: toGroups(d.data.apart), together: toGroups(d.data.together) };
+      store.set("owner", OWNER);
+    } catch (e) {
+      if (/bad_owner_code/.test((e && e.message) || "")) { OWNER = ""; store.del("owner"); }
+      ui.owner = null;
+    }
+    render();
+  }
+  async function tryOwner(code) {
+    if (!code || ui.owner) return false;
+    const d = await sb.rpc("app_owner_load", { p_token: TOKEN, p_code: CODE, p_owner: code });
+    if (d.error || !d.data) return false;
+    OWNER = code; ui.owner = { rookies: d.data.rookies || [], apart: toGroups(d.data.apart), together: toGroups(d.data.together) };
+    store.set("owner", OWNER); ui.rosterFilter = ""; render();
+    setTimeout(() => document.querySelector(".card.private")?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+    return true;
+  }
+  // Keep apart / together are stored as one person and a list: [{ p, with: [ids] }].
+  // Older plain pairs ([a, b]) get folded into that shape.
+  function toGroups(list) {
+    const out = [];
+    (list || []).forEach(x => {
+      const g = Array.isArray(x) ? { p: x[0], with: [x[1]] } : x && x.p ? { p: x.p, with: (x.with || []).slice() } : null;
+      if (!g) return;
+      const same = out.find(y => y.p === g.p);
+      if (same) g.with.forEach(id => { if (!same.with.includes(id)) same.with.push(id); }); else out.push(g);
+    });
+    return out;
+  }
+  async function saveOwner() {
+    render();
+    const { error } = await sb.rpc("app_owner_save", { p_token: TOKEN, p_code: CODE, p_owner: OWNER, s: ui.owner });
+    if (error) { toast("Couldn't save private settings", 3000); loadOwner(); }
+  }
+  function privateCard() {
+    if (!ui.owner) return "";
+    const people = sortPlayers(activePlayers()), rk = new Set(ui.owner.rookies);
+    const opts = people.map(p => `<option value="${p.id}">${esc(label(p))}</option>`).join("");
+    const groups = k => { const verb = k === "apart" ? "stays away from" : "goes with"; return `${ui.owner[k].map((g, i) => {
+        const others = people.filter(p => p.id !== g.p && !g.with.includes(p.id)).map(p => `<option value="${p.id}">${esc(label(p))}</option>`).join("");
+        return `<div class="grp">
+          <div class="grp-head"><b>${esc(label(P(g.p)))}</b> <span class="muted">${verb}</span><button class="icon-btn" data-act="o-del" data-k="${k}" data-i="${i}" aria-label="Remove ${esc(label(P(g.p)))}'s list">×</button></div>
+          <div class="grp-list">${g.with.map(id => `<span class="pair">${esc(label(P(id)))}<button class="icon-btn" data-act="o-unwith" data-k="${k}" data-i="${i}" data-p="${id}" aria-label="Remove ${esc(label(P(id)))}">×</button></span>`).join("")}
+            <select class="line-in grp-add" data-act="o-with" data-k="${k}" data-i="${i}" aria-label="Add someone"><option value="">+ add someone</option>${others}</select></div>
+        </div>`;
+      }).join("") || '<span class="muted">Nobody yet.</span>'}
+      <div class="row" style="gap:6px"><select class="line-in" id="${k}P"><option value="">Pick a person…</option>${opts}</select><button class="btn sm" data-act="o-add" data-k="${k}">Add</button></div>` };
+    return `<section class="card private"><div class="row" style="justify-content:space-between"><h3>Private settings</h3><button class="btn sm ghost" data-act="o-lock">Lock</button></div>
+      <p class="muted" style="margin:0">Only on devices where you've entered the private code. Nobody else sees these.</p>
+      <h4>Rookies <span class="muted">(${rk.size})</span></h4>
+      <p class="muted" style="margin:0;font-size:14px">The line maker spreads them out so no line is stacked with rookies.</p>
+      <div class="tchips">${people.map(p => `<button class="tchip" data-act="o-rookie" data-id="${p.id}" aria-pressed="${rk.has(p.id)}">${esc(label(p))}</button>`).join("")}</div>
+      <h4>Keep apart</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then everyone they shouldn't share a line with. Never broken.</p><div class="pairs">${groups("apart")}</div>
+      <h4>Keep together</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then who should come with them. They come along when they fit.</p><div class="pairs">${groups("together")}</div>
+    </section>`;
+  }
+
+  // ---------- edit lines: select several to delete, press-and-hold to drag into a new order ----------
+  // ui.editLines = { sel: Set of line ids, confirm: bool }. ui.drag while a tile is being dragged.
+  function renderEditLines(g) {
+    const lines = gamePoints(g.id), sel = ui.editLines.sel;
+    let next = 1;
+    const tiles = lines.map((pt, i) => {
+      const n = playsOf(pt), from = next; next += n;
+      const o = outs(pt), played = o.some(x => x.result);
+      const res = o.map(x => `<i class="r ${x.result === "us" ? "us" : x.result === "them" ? "them" : ""}"></i>`).join("");
+      const names = (pt.lineup || []).map(x => { const p = P(x.p); return `<span class="${p?.gender || "U"}">${esc(label(p))}</span>`; }).join("");
+      return `<article class="etile${sel.has(pt.id) ? " sel" : ""}${played ? " played" : ""}" data-id="${pt.id}" data-plays="${n}" aria-pressed="${sel.has(pt.id)}" tabindex="0">
+        <div class="et-head"><b class="et-n">Line ${i + 1}</b><span class="et-pts">${n === 1 ? "Pt " + from : "Pts " + from + "–" + (from + n - 1)}</span><span class="et-check" aria-hidden="true"></span></div>
+        <div class="et-res">${res}${played ? '<span class="et-played">played</span>' : ""}</div>
+        <div class="et-names">${names || '<span class="muted">No players</span>'}</div>
+      </article>`;
+    }).join("");
+    return `<div class="game-head"><div><p class="eyebrow">Edit lines</p><h2 class="sec">${esc(g.name)}</h2></div></div>
+      <p class="muted edit-help">Tap lines to select them for deleting. Press and hold a line, then drag it to move it.</p>
+      <div class="egrid" id="egrid">${tiles}</div>`;
+  }
+  function editBar() {
+    const n = ui.editLines.sel.size, g = game();
+    const playedSel = n ? gamePoints(g.id).filter(pt => ui.editLines.sel.has(pt.id) && outs(pt).some(o => o.result)).length : 0;
+    const what = `${n} line${n === 1 ? "" : "s"}`;
+    return `<div class="clipbar editbar" role="status">
+      <span class="clip-text">${n ? `<b>${what} selected</b>${playedSel ? ` · ${playedSel} already played` : ""}` : "<b>Edit lines</b> Select lines or drag to reorder"}</span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap">
+        ${n ? `<button class="btn sm danger" data-act="edit-delete">${ui.editLines.confirm ? "Tap again to delete " + what : "Delete " + what}</button>` : ""}
+        <button class="btn sm primary" data-act="edit-done">Done</button>
+      </span></div>`;
+  }
+  function undoDelBar() {
+    return `<div class="clipbar" role="status"><span class="clip-text"><b>${esc(ui.undoDel.text)}</b></span>
+      <span class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" data-act="undo-delete">Undo</button><button class="btn sm" data-act="undo-delete-done">Done</button></span></div>`;
+  }
+  async function deleteSelected() {
+    const g = game(); if (!g) return;
+    const before = gamePoints(g.id), ids = before.filter(pt => ui.editLines.sel.has(pt.id)).map(pt => pt.id);
+    if (!ids.length) return;
+    const rows = before.filter(pt => ids.includes(pt.id)).map(pt => JSON.parse(JSON.stringify(pt)));
+    ui.undoDel = { gid: g.id, rows, order: before.map(pt => pt.id), text: `Deleted ${ids.length} line${ids.length === 1 ? "" : "s"}.` };
+    ui.editLines = null; ui.swipe = null;
+    for (const id of ids) await save("app_delete_point", { p_id: id }, () => removeLocal("points", id));
+    const order = gamePoints(g.id).map(x => x.id);
+    await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+    render();
+  }
+  async function undoDelete() {
+    const u = ui.undoDel; if (!u) return; ui.undoDel = null;
+    for (const row of u.rows) await savePoint(row);
+    const order = u.order.filter(id => S.points.some(p => p.id === id));
+    await save("app_reorder_points", { p_game: u.gid, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+    render(); toast("Lines are back");
+  }
+  function saveOrder(order) {
+    const g = game(); if (!g) return;
+    save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
+  }
+
+  // Dragging: a mouse drags once it moves a few pixels; a finger has to rest on the tile for a
+  // moment first, so a normal swipe still scrolls the page.
+  (function setupDrag() {
+    let press = null;   // { tile, id, x, y, timer, pointerId, touch }
+    const HOLD = 280, SLOP = 8;
+    const grid = () => document.getElementById("egrid");
+    function start() {
+      const t = press.tile, r = t.getBoundingClientRect();
+      ui.drag = { id: press.id, tile: t, dx: press.x - r.left, dy: press.y - r.top, pending: false };
+      t.style.transition = "none";
+      t.classList.add("dragging"); grid()?.classList.add("is-dragging");
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch (e) {}
+    }
+    // Keep the dragged tile under the finger: measure its slot without the offset, then offset it.
+    function place(x, y) {
+      const t = ui.drag.tile; t.style.transform = "";
+      const b = t.getBoundingClientRect();
+      t.style.transform = `translate(${x - ui.drag.dx - b.left}px, ${y - ui.drag.dy - b.top}px)`;
+    }
+    function moveTo(x, y) {
+      const d = ui.drag, gEl = grid(); if (!d || !gEl) return;
+      // Move the tile's slot to whichever tile the finger is over.
+      const over = [...gEl.children].find(el => { if (el === d.tile) return false; const b = el.getBoundingClientRect(); return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom; });
+      if (over) {
+        const kids = [...gEl.children], from = kids.indexOf(d.tile), to = kids.indexOf(over);
+        gEl.insertBefore(d.tile, from < to ? over.nextSibling : over);
+        let from1 = 1;
+        [...gEl.children].forEach((el, k) => {
+          const n = +el.dataset.plays || 1, nEl = el.querySelector(".et-n"), pEl = el.querySelector(".et-pts");
+          if (nEl) nEl.textContent = "Line " + (k + 1);
+          if (pEl) pEl.textContent = n === 1 ? "Pt " + from1 : "Pts " + from1 + "–" + (from1 + n - 1);
+          from1 += n;
+        });
+      }
+      place(x, y);
+      // Scroll the page when dragging near the top or bottom.
+      const edge = 80; if (y < edge + 60) window.scrollBy(0, -10); else if (y > window.innerHeight - edge - 70) window.scrollBy(0, 10);
+    }
+    function finish(cancel) {
+      const d = ui.drag; ui.drag = null; grid()?.classList.remove("is-dragging");
+      if (!d) return;
+      const gEl = grid(), order = gEl ? [...gEl.children].map(el => el.dataset.id) : [];
+      const g = game(), was = g ? gamePoints(g.id).map(p => p.id) : [];
+      if (!cancel && order.length && order.join() !== was.join()) saveOrder(order); else render();
+    }
+    document.addEventListener("pointerdown", e => {
+      const tile = e.target.closest && e.target.closest(".etile"); if (!tile || !ui.editLines || e.button > 0) return;
+      press = { tile, id: tile.dataset.id, x: e.clientX, y: e.clientY, pointerId: e.pointerId, touch: e.pointerType !== "mouse", moved: false, timer: null };
+      if (press.touch) press.timer = setTimeout(() => { if (press && !press.moved) start(); }, HOLD);
+    });
+    document.addEventListener("pointermove", e => {
+      if (!press || e.pointerId !== press.pointerId) return;
+      const far = Math.hypot(e.clientX - press.x, e.clientY - press.y) > SLOP;
+      if (!ui.drag) {
+        if (far && press.touch) { clearTimeout(press.timer); press.moved = true; return; }   // it's a scroll
+        if (far && !press.touch) start(); else return;
+      }
+      press.moved = true; moveTo(e.clientX, e.clientY);
+    });
+    // While dragging with a finger, stop the page from scrolling instead.
+    document.addEventListener("touchmove", e => { if (ui.drag) e.preventDefault(); }, { passive: false });
+    const up = e => {
+      if (!press || (e.pointerId != null && e.pointerId !== press.pointerId)) return;
+      clearTimeout(press.timer);
+      const p = press; press = null;
+      if (ui.drag) { finish(e.type === "pointercancel"); return; }
+      if (e.type === "pointerup" && !p.moved && ui.editLines) {   // a tap: select or unselect
+        const sel = ui.editLines.sel; sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); ui.editLines.confirm = false; render();
+      }
+    };
+    document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
+    document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest(".etile")) e.preventDefault(); });
+  })();
 
   // ---------- actions ----------
   function newPointAfter(srcPt, insertAfter) {
@@ -662,10 +1087,13 @@
       save("app_delete_game", { p_id: gid }, () => { removeLocal("games", gid); S.points = S.points.filter(x => x.game_id !== gid); ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null; store.set("game", ui.gameId); });
       return;
     }
-    if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
+    if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); if (swipeMode()) showLine(pts.length, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
     if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
     if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
+    if (a === "go-line") { const cur = (ui.swipe && ui.swipe.i) || 0; showLine(el.dataset.dir ? cur + +el.dataset.dir : +el.dataset.i, true); return; }
+    if (a === "jump-now") { jumpNow(); return; }
     if (a === "result") {
+      const done = watchFinish(id);
       const k = +el.dataset.k, cur = outs(S.points.find(x => x.id === id))[k], res = cur.result === el.dataset.v ? "" : el.dataset.v;
       // Whoever gets scored on receives: they scored -> we start next point on O; we scored -> D.
       const nextStart = res === "them" ? "O" : res === "us" ? "D" : "";
@@ -678,17 +1106,41 @@
         const no = outs(S.points.find(x => x.id === nxt.lineId))[nxt.k];
         if (!no.result) patchPoint(nxt.lineId, pt => { pt.outcomes[nxt.k].start_on = nextStart; });
       }
+      done();
       return;
     }
     if (a === "set-goal") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = v; if (o.assist === v) o.assist = null; }); return; }
-    if (a === "set-assist") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); return; }
+    if (a === "set-assist") { const done = watchFinish(id), k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); done(); return; }
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
+    if (a === "edit-lines") { closeSheet(); ui.editLines = { sel: new Set(), confirm: false }; ui.undoDel = null; render(); window.scrollTo(0, 0); return; }
+    if (a === "edit-done") { ui.editLines = null; render(); return; }
+    if (a === "edit-delete") { if (!ui.editLines.confirm) { ui.editLines.confirm = true; render(); return; } deleteSelected(); return; }
+    if (a === "undo-delete") { undoDelete(); return; }
+    if (a === "undo-delete-done") { ui.undoDel = null; render(); return; }
+    if (a === "fill-open") { openSheet({ type: "fill", n: 3, plays: 2, existing: true }); return; }
+    if (a === "fill-n") { ui.sheet.n = +el.dataset.v; renderSheet(); return; }
+    if (a === "fill-pairing") { ui.pairing = el.dataset.v; store.set("pairing", ui.pairing); renderSheet(); return; }
+    if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
+    if (a === "fill-go") { const s = ui.sheet, ex = $("#fillExisting")?.checked; ui.sheet = null; renderSheet(); autoFill({ newLines: s.n, plays: s.plays, existing: ex }); return; }
+    if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }
+    if (a === "auto-undo") { undoAuto(); return; }
+    if (a === "auto-done") { ui.auto = null; render(); return; }
+    if (a === "o-rookie") { const r = new Set(ui.owner.rookies); r.has(id) ? r.delete(id) : r.add(id); ui.owner.rookies = [...r]; saveOwner(); return; }
+    if (a === "o-add") {
+      const k = el.dataset.k, x = $("#" + k + "P").value;
+      if (!x) { toast("Pick a person first"); return; }
+      if (ui.owner[k].some(g => g.p === x)) { toast(label(P(x)) + " already has a list. Add people to it."); return; }
+      ui.owner[k] = [...ui.owner[k], { p: x, with: [] }]; saveOwner(); return;
+    }
+    if (a === "o-del") { const k = el.dataset.k, i = +el.dataset.i; ui.owner[k] = ui.owner[k].filter((_, j) => j !== i); saveOwner(); return; }
+    if (a === "o-unwith") { const k = el.dataset.k, i = +el.dataset.i, g = ui.owner[k][i]; g.with = g.with.filter(x => x !== el.dataset.p); saveOwner(); return; }
+    if (a === "o-lock") { OWNER = ""; store.del("owner"); ui.owner = null; render(); toast("Locked"); return; }
     if (a === "pick-sort") { ui.pickSort = el.dataset.v; store.set("pickSort", ui.pickSort); renderSheet(); return; }
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
-      if (s.zone) { const z = s.zone; patchGame(g => { g.zone = g.zone || {}; g.zone[z] = [...(g.zone[z] || []), pid]; }); renderSheet(); return; }
+      if (s.zone) { const z = s.zone; saveZone(n => { n[z] = [...n[z], pid]; }); renderSheet(); return; }
       patchPoint(s.pointId, pt => { pt.lineup = pt.lineup || []; if (s.current) { const slot = pt.lineup.find(x => x.p === s.current); if (slot) slot.p = pid; } else if (pt.lineup.length < SLOTS) pt.lineup.push({ p: pid, r: "" }); });
       closeSheet(); return;
     }
@@ -716,6 +1168,7 @@
         return;
       }
       closeSheet();
+      if (a === "pm-suggest") autoFill({ only: pid });
       if (a === "pm-copy") {
         const lines = gamePoints(ui.gameId), n = lines.findIndex(x => x.id === pid) + 1, g = game();
         ui.clip = { lineup: (pt.lineup || []).map(y => ({ p: y.p, r: y.r || "" })), from: "Line " + n + (g ? " · " + g.name : "") };
@@ -732,7 +1185,7 @@
     }
     if (a === "bucket") { ui.openBucket = ui.openBucket === el.dataset.k ? null : el.dataset.k; render(); return; }
     if (a === "zone-add") { openSheet({ type: "pick", zone: el.dataset.z }); return; }
-    if (a === "zone-remove") { const z = el.dataset.z, i = +el.dataset.i; patchGame(g => { g.zone[z].splice(i, 1); }); return; }
+    if (a === "zone-remove") { const z = el.dataset.z, i = +el.dataset.i; saveZone(n => { n[z].splice(i, 1); }); return; }
     if (a === "stats-scope") { ui.stats.scope = el.dataset.v; render(); return; }
     if (a === "sort") { ui.stats.sort = el.dataset.k; render(); return; }
     if (a === "add-g") { ui.addG = el.dataset.v; render(); return; }
@@ -748,14 +1201,15 @@
       try { navigator.clipboard.writeText(text).then(() => toast("Link copied"), () => toast("Select the link and copy it")); } catch (err) { toast("Select the link and copy it"); }
       return;
     }
-    if (a === "logout") { store.del("code"); store.del("cache"); CODE = ""; location.reload(); return; }
+    if (a === "logout") { store.del("code"); store.del("cache"); store.del("owner"); CODE = ""; location.reload(); return; }
   });
 
   document.addEventListener("change", e => {
     const el = e.target;
-    if (el.id === "gameSel") { ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
+    if (el.id === "gameSel") { ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
+    if (a === "o-with") { const g = ui.owner[el.dataset.k][+el.dataset.i]; if (el.value && !g.with.includes(el.value)) { g.with.push(el.value); saveOwner(); } return; }
     if (a === "p-nick") { const p = P(id), v = el.value.trim(); if (v !== p.nick) savePlayer({ ...p, nick: v }); return; }
   });
 
@@ -767,7 +1221,10 @@
   // iPhones ignore the "no zoom" setting for pinches, so stop the pinch gesture itself.
   ["gesturestart", "gesturechange"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && ui.sheet) closeSheet(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && ui.sheet) closeSheet();
+    if (e.key === "Enter" && e.target.id === "rosterFilter") { e.preventDefault(); tryOwner(e.target.value.trim()); }
+  });
 
   document.addEventListener("submit", e => {
     e.preventDefault();
@@ -829,6 +1286,13 @@
   window.addEventListener("focus", () => { if (S.team) scheduleRefresh(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.team) scheduleRefresh(); });
   setInterval(() => { if (S.team && !document.hidden) scheduleRefresh(); }, 60000);
+
+  // Say so once when this phone has just moved onto a new version.
+  (function announceVersion() {
+    const seen = store.get("seenVersion", null);
+    if (seen && seen !== APP_VERSION) setTimeout(() => toast("Updated to v" + APP_VERSION.replace(/^(test\.|\d{4}\.)/, "")), 900);
+    store.set("seenVersion", APP_VERSION);
+  })();
 
   // ---------- gate ----------
   function renderGate(msg) {

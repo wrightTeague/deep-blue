@@ -22,4 +22,8 @@ Static site (`index.html`, `app.js`, `styles.css`) on GitHub Pages. Data is in a
 
 ## Test board
 
-`test/` is a separate copy of the app for trying new features (right now: the automatic line maker and private settings). It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json` and loads `lines.js`, the line-making logic, which has no DOM code so it can be tested in Node. Zone spots on the test board are stored per tournament (`tournaments.zone`, saved with `app_save_tournament_zone`). Private settings (rookies, keep-apart and keep-together lists) live in the `owner_settings` table and are only returned by `app_owner_load` / `app_owner_save` with a second, private code.
+`test/` is a separate copy of the app for trying new features before they go to the real board. It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json`.
+
+`lines.js` holds the line-making logic (who goes out next, captain pairs, zone spots, the 5:2 check). It has no page code, so it can be tested in Node.
+
+See CHANGELOG.md for what changed and when.
