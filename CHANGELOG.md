@@ -2,6 +2,12 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 4, 2026 (later)
+
+**Test board**
+- **Two phones editing the same line no longer overwrite each other.** If someone else changed the line a moment before you, the board picks up their version and adds your change on top, so both stick.
+- **Updates wait until you're done.** When a new version comes out, the board won't reload while you're typing, have a menu open, or are in Edit lines; it reloads right after.
+
 ## Oct 4, 2026 (afternoon): everything from the test board is now on the real board
 
 **Real board**
