@@ -329,3 +329,7 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
 .et-names{display:flex;flex-wrap:wrap;gap:2px 6px;font-size:14px;line-height:1.25}
 .et-names .W{color:var(--w-ink)} .et-names .M{color:var(--m)}
 .editbar .btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.fill-pair{display:flex;flex-direction:column;gap:6px}
+.fill-pair > span{font-size:16px}
+.fill-pair .seg button{font-size:15px}
+.fill-pair-note{margin:0;font-size:14px}

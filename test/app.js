@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.10"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.11"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -45,6 +45,7 @@
   ui.undo = null;                      // { id, lineup } for the last paste
   ui.owner = null;                     // { rookies, apart, together } once unlocked with the private code
   ui.auto = null;                      // last auto-fill, for Undo: { changed:[{id,lineup}], created:[id], text }
+  ui.pairing = store.get("pairing", "rotate");   // Fill lines captain pairs: "rotate", "usual" or "rest"
   ui.pickSort = store.get("pickSort", "sat"); // player picker order for lines: "sat" (most lines sat first), "played" (fewest lines first) or "az"
 
   const P = id => S.players.find(p => p.id === id);
@@ -705,9 +706,15 @@
           <div class="seg" role="group" aria-label="New lines">${[0, 1, 2, 3, 4, 6].map(v => `<button data-act="fill-n" data-v="${v}" aria-pressed="${s.n === v}">${v}</button>`).join("")}</div><span>new lines</span></div>
         <div class="row" style="gap:10px"><span>Each plays</span>
           <div class="seg" role="group" aria-label="Points per new line">${[1, 2, 3].map(v => `<button data-act="fill-plays" data-v="${v}" aria-pressed="${s.plays === v}">${v}</button>`).join("")}</div><span>point${s.plays === 1 ? "" : "s"}</span></div>
+        <div class="fill-pair"><span>Captain pairs</span>
+          <div class="seg" role="group" aria-label="Captain pairs">${[["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]].map(([v, t]) => `<button data-act="fill-pairing" data-v="${v}" aria-pressed="${ui.pairing === v}">${t}</button>`).join("")}</div>
+          <p class="muted fill-pair-note">${ui.pairing === "rotate" ? "Each captain goes out with whoever they've played with least today, so everyone plays with everyone."
+            : ui.pairing === "usual" ? (() => { const up = DBLines.usualPairs(S.players, S.points); return up.length ? `Usual pairs two rounds out of three, then a mixed round: ${up.map(([a, b]) => esc(label(P(a))) + " + " + esc(label(P(b)))).join(" · ")}.` : "No usual pairs yet. Once captains have played together a few times, they'll show here."; })()
+            : "Whoever has rested longest goes out together, so the same pairs tend to come back every few lines."}</p>
+        </div>
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules">
-          <li>2 captains or president per line, whoever has rested longest</li>
+          <li>2 captains or president per line, whoever has rested longest goes first</li>
           <li>3 women and 4 men (asks first if the men fall a point behind over the day)</li>
           <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back, people out are skipped</li>
@@ -763,13 +770,13 @@
     }
     if (!targets.length) { toast("Nothing to fill: every line is full or already played."); return; }
     const o = ui.owner || { rookies: [], apart: [], together: [] };
-    const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id));
+    const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id)), usualPairs = DBLines.usualPairs(S.players, S.points);
     for (const i of targets) {
       const mb = DBLines.menBehind({ players: S.players, lines, idx: i, dayLines });
       const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
       const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
-        players: S.players, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio,
+        players: S.players, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, pairing: ui.pairing, usualPairs,
         positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
       });
       lines[i].lineup = r.lineup;
@@ -1115,6 +1122,7 @@
     if (a === "undo-delete-done") { ui.undoDel = null; render(); return; }
     if (a === "fill-open") { openSheet({ type: "fill", n: 3, plays: 2, existing: true }); return; }
     if (a === "fill-n") { ui.sheet.n = +el.dataset.v; renderSheet(); return; }
+    if (a === "fill-pairing") { ui.pairing = el.dataset.v; store.set("pairing", ui.pairing); renderSheet(); return; }
     if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
     if (a === "fill-go") { const s = ui.sheet, ex = $("#fillExisting")?.checked; ui.sheet = null; renderSheet(); autoFill({ newLines: s.n, plays: s.plays, existing: ex }); return; }
     if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }

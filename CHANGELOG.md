@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 4, 2026
 
 **Test board**
+- **Choose how captains pair up** in Fill lines: **Rotate** (everyone plays with everyone over the day), **Mostly usual** (the pairs that have played together most, two rounds of three lines out of three, then a mixed round), or **Same pairs** (the original: whoever has rested longest). Each phone remembers its choice.
 - **Edit lines.** In the game menu (⋯), "Edit lines" shows every line as a small tile. Tap tiles to select them and delete several at once (it asks once, and there's an Undo). Press and hold a tile, then drag it to move it; on a laptop just drag. Line and point numbers update as you go.
 - **Version number** in the top bar (like "v10"), and a short "Updated to v10" note the first time a phone opens a new version.
 - **Captain partners rotate.** Fill lines still sends out whichever captain or president has rested longest, but their partner is now the rested one they've played with least that day, instead of the same pairs coming back every third line. Over a day every pair plays together a few times. Captains still play about a third of lines, sometimes resting 1 or 3 lines instead of exactly 2.

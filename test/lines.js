@@ -105,9 +105,12 @@
       }
     }
 
-    // 1. Two leaders (captains and president). The one who has rested longest goes first;
-    //    their partner is the rested leader they've played with least today, so partners
-    //    rotate through the day instead of the same pairs coming back every third line.
+    // 1. Two leaders (captains and president). The one who has rested longest goes first.
+    //    Their partner depends on o.pairing:
+    //    "rest"   – whoever else has rested longest (the same pairs tend to come back);
+    //    "usual"  – their usual partner (o.usualPairs), except every third round of three
+    //               lines, which mixes with whoever they've played with least today;
+    //    "rotate" – (default) whoever they've played with least today.
     const leaderPool = active.filter(isLeader);
     const together2 = new Map();   // "a|b" → lines together today
     const pk = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
@@ -115,13 +118,49 @@
       for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) together2.set(pk(ids[x], ids[y]), (together2.get(pk(ids[x], ids[y])) || 0) + 1); };
     (o.dayLines || []).forEach(game => (game || []).forEach(l => { if (resultsOf(l)) countIn(l); }));
     for (let i = 0; i < o.idx; i++) countIn(o.lines[i]);
+    const mode = o.pairing || "rotate";
+    const usual = new Map(); (o.usualPairs || []).forEach(([a, b]) => { usual.set(a, b); usual.set(b, a); });
+    const linesToday = (o.dayLines || []).reduce((n, game) => n + (game || []).filter(l => resultsOf(l)).length, 0) + o.idx;
+    const mixedRound = Math.floor(linesToday / 3) % 3 === 2;
+    // "usual": leaders go out in rounds of three lines, each leader once per round. Two rounds
+    // out of three use the usual pairs; the third uses the mix they've played together least.
+    // Within a round, the pair that has rested longest goes first (never back to back).
+    const seqToday = [...(o.dayLines || []).flatMap(game => (game || []).filter(l => resultsOf(l))), ...o.lines.slice(0, o.idx)];
+    const usedThisRound = new Set(seqToday.slice(seqToday.length - (linesToday % 3)).flatMap(l => (l.lineup || []).map(s => s.p)));
+    function matchings(ids) {
+      if (ids.length < 2) return [[]];
+      const [a, ...more] = ids, out = [];
+      more.forEach((b, i) => matchings(more.filter((_, j) => j !== i)).forEach(m => out.push([[a, b], ...m])));
+      return out;
+    }
+    function usualRoundPick(cands, on) {
+      const avail = leaderPool.filter(p => !usedThisRound.has(p.id) || on.includes(p.id)).map(p => p.id);
+      if (avail.length < 2 || avail.length % 2 || avail.length > 8) return null;
+      const isUsual = ([a, b]) => usual.get(a) === b;
+      const score = m => m.reduce((t, pr) => t + (isUsual(pr) ? (mixedRound ? 10 : -10) : 0) + (together2.get(pk(pr[0], pr[1])) || 0), 0);
+      const best = matchings(avail).sort((x, y) => score(x) - score(y))[0];
+      const ok = new Set(cands.map(p => p.id)), restOf = id => { const v = rest.info(id).lines; return v === null ? 99 : v; };
+      const pairs = best.filter(([a, b]) => (ok.has(a) || on.includes(a)) && (ok.has(b) || on.includes(b)) && (!on.length || on.includes(a) || on.includes(b)));
+      if (!pairs.length) return null;
+      const pr = pairs.sort((x, y) => (restOf(y[0]) + restOf(y[1])) - (restOf(x[0]) + restOf(x[1])))[0];
+      const id = pr.find(x => !on.includes(x));
+      return id ? cands.find(p => p.id === id) || null : null;
+    }
     for (const strict of [true, false]) {
       while (count(isLeader) < wantLeaders && line.length < SLOTS) {
         const cands = order(leaderPool).filter(p => fits(p, strict));
         if (!cands.length) break;
         const on = line.map(s => s.p).filter(id => isLeader(byId.get(id)));
         const seen = p => on.reduce((a, id) => a + (together2.get(pk(id, p.id)) || 0), 0);
-        const pick = on.length ? cands.map((p, k) => ({ p, k })).sort((a, b) => seen(a.p) - seen(b.p) || a.k - b.k)[0].p : cands[0];
+        let pick = cands[0];
+        // Usual rounds: start with the most-rested leader whose usual partner is also ready.
+        const roundPick = mode === "usual" ? usualRoundPick(cands, on) : null;
+        if (roundPick) { add(roundPick, "H"); continue; }
+        if (on.length && mode !== "rest") {
+          const mate = on.length === 1 ? usual.get(on[0]) : null;
+          const fresh = cands.map((p, k) => ({ p, k })).sort((a, b) => seen(a.p) - seen(b.p) || a.k - b.k);
+          pick = fresh[0].p;
+        }
         add(pick, "H");
       }
     }
@@ -199,6 +238,17 @@
     return { handlers, deep: best.deep, short: best.short };
   }
 
+  // Usual captain pairs: from every past line with a result, the pairs of leaders who played
+  // together most, taken greedily so nobody is in two pairs. → [[id, id], ...]
+  function usualPairs(players, pastLines) {
+    const lead = new Set(players.filter(p => p.active !== false && isLeader(p)).map(p => p.id)), n = new Map();
+    (pastLines || []).forEach(l => { if (!resultsOf(l)) return; const ids = (l.lineup || []).map(s => s.p).filter(id => lead.has(id));
+      for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) { const k = [ids[x], ids[y]].sort().join("|"); n.set(k, (n.get(k) || 0) + 1); } });
+    const used = new Set(), out = [];
+    [...n.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).forEach(([k]) => { const [a, b] = k.split("|"); if (!used.has(a) && !used.has(b)) { used.add(a); used.add(b); out.push([a, b]); } });
+    return out;
+  }
+
   // Are the men falling behind the women over the whole day? With 4 of the 6 leaders being
   // men, 3:4 lines give non-leader women a bit more time than non-leader men, and it adds up
   // across games. Compares average points played by non-leaders today: earlier games that
@@ -215,7 +265,7 @@
     return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
-  const api = { restBefore, planLine, menBehind, assignSpots, playsOf, toPairs, SLOTS };
+  const api = { restBefore, planLine, menBehind, assignSpots, usualPairs, playsOf, toPairs, SLOTS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.DBLines = api;
 })(typeof window !== "undefined" ? window : this);
