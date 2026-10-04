@@ -292,4 +292,4 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
   .points::-webkit-scrollbar{display:none}
   .points > .point,.points > .add-wrap{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always}
 }
-@media (max-width:759px){ .points{overflow-y:hidden;transition:height .2s ease} }
+@media (max-width:759px){ .points{overflow-y:hidden} }

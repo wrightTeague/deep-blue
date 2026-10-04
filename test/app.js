@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.6"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.7"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -233,6 +233,9 @@
     const loose = S.games.filter(g => !tourOf(g));
     const gameOpts = tours().map(t => { const gs = S.games.filter(g => g.tournament_id === t.id); return gs.length ? `<optgroup label="${esc(t.name)}">${gs.map(g => opt(g, false)).join("")}</optgroup>` : ""; }).join("")
       + (loose.length ? (tours().length ? `<optgroup label="Other games">${loose.map(g => opt(g, true)).join("")}</optgroup>` : loose.map(g => opt(g, true)).join("")) : "");
+    // Mid-swipe redraws (every save redraws) keep the line the swipe has reached.
+    const oldTrack = trackOf();
+    if (oldTrack && ui.swipe && ui.swipe.game === ui.gameId && swipeMode()) { const st = cardStep(oldTrack); if (st > 0) ui.swipe.i = clampLine(oldTrack, oldTrack.scrollLeft / st); }
     app.innerHTML = `
       <header class="top"><div class="top-in">
         <p class="brand">Deep Blue <span class="test-tag">TEST</span></p>
@@ -256,20 +259,30 @@
   // save re-draws the page). A new game opens on the NOW line. After a line is finished
   // (ui.advanceTo set by the result / assist taps) it slides on to the next one.
   function trackOf() { return document.getElementById("pointsTrack"); }
-  function cardStep(t) { const c = t.children[0], gap = parseFloat(getComputedStyle(t).columnGap) || 0; return c ? c.getBoundingClientRect().width + gap : t.clientWidth; }
+  function cardStep(t) { const c = t.children[0]; if (!c) return 0; const gap = parseFloat(getComputedStyle(t).columnGap) || 0; return c.getBoundingClientRect().width + gap; }
+  function clampLine(t, i) { const n = t.children.length - 1; return Number.isFinite(i) ? Math.max(0, Math.min(Math.round(i), n)) : 0; }
   function showLine(i, smooth) {
     const t = trackOf(); if (!t) return;
-    i = Math.max(0, Math.min(i, t.children.length - 1));
+    i = clampLine(t, i);
     ui.swipe = { game: ui.gameId, i };
-    if (swipeMode()) t.scrollTo({ left: i * cardStep(t), behavior: smooth ? "smooth" : "instant" });
-    paintPager(i);
+    const step = cardStep(t);
+    if (swipeMode() && step > 0) t.scrollTo({ left: i * step, behavior: smooth ? "smooth" : "instant" });
+    paintPager(i, i);
   }
-  function paintPager(i) {
+  // i = the line being shown; pos = exact swipe position (e.g. 2.4 while moving from line 3 to 4).
+  // Runs every frame while swiping, so the dots, "Line X of Y" and the height keep up.
+  function paintPager(i, pos) {
     const t = trackOf(); if (!t) return;
-    // The swipe area takes the height of the line being shown (not the tallest line).
-    const c = t.children[Math.max(0, Math.min(i, t.children.length - 1))];
-    t.style.height = swipeMode() && c ? (c.offsetHeight + 12) + "px" : "";
-    const n = t.children.length - 1, txt = document.getElementById("pagerText");
+    const kids = t.children, n = kids.length - 1;
+    if (swipeMode()) {
+      // Tall enough for both lines in view mid-swipe, so nothing below shows over them.
+      const a = kids[clampLine(t, Math.floor(pos))], b = kids[clampLine(t, Math.ceil(pos))];
+      const h = Math.max(a ? a.offsetHeight : 0, b ? b.offsetHeight : 0);
+      t.style.height = h ? (h + 12) + "px" : "";
+    } else t.style.height = "";
+    if (paintPager.track === t && paintPager.last === i) return;
+    paintPager.track = t; paintPager.last = i;
+    const txt = document.getElementById("pagerText");
     if (txt) txt.textContent = i >= n ? "New line" : `Line ${i + 1} of ${n}`;
     document.querySelectorAll("#lineDots .dot").forEach((d, k) => d.setAttribute("aria-current", k === i ? "true" : "false"));
   }
@@ -277,13 +290,20 @@
     const t = trackOf(); if (!t) return;
     const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--top-h", top.offsetHeight + "px");
     const g = game(), lines = g ? gamePoints(g.id) : [], now = nowPoint(lines);
-    if (!ui.swipe || ui.swipe.game !== ui.gameId) ui.swipe = { game: ui.gameId, i: now ? now.line : Math.max(lines.length - 1, 0) };
+    if (!ui.swipe || ui.swipe.game !== ui.gameId || !Number.isFinite(ui.swipe.i)) ui.swipe = { game: ui.gameId, i: now ? now.line : Math.max(lines.length - 1, 0) };
     showLine(ui.swipe.i, false);
     if (ui.advanceTo != null) { const to = ui.advanceTo; ui.advanceTo = null; if (swipeMode()) setTimeout(() => { showLine(to, true); setTimeout(nowRowToMiddle, 350); }, 700); }
-    let tm = null;
+    let raf = 0;
     t.addEventListener("scroll", () => {
-      clearTimeout(tm);
-      tm = setTimeout(() => { const i = Math.round(t.scrollLeft / cardStep(t)); ui.swipe = { game: ui.gameId, i }; paintPager(i); }, 60);
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!t.isConnected || !swipeMode()) return;   // this copy was replaced by a redraw
+        const step = cardStep(t); if (!(step > 0)) return;
+        const pos = t.scrollLeft / step, i = clampLine(t, pos);
+        ui.swipe = { game: ui.gameId, i };
+        paintPager(i, pos);
+      });
     }, { passive: true });
   }
   // Scroll the page (up or down only) so the NOW row sits in the middle of the screen.
@@ -753,7 +773,10 @@
     const first = Math.min(...targets) + 1, last = Math.max(...targets) + 1;
     ui.auto = { changed, created, text: `Filled ${first === last ? "Line " + first : "Lines " + first + "–" + last}.`, notes };
     render();
-    setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[first - 1]?.scrollIntoView({ block: "start", behavior: "smooth" }); }, 60);
+    setTimeout(() => {
+      if (swipeMode()) { showLine(first - 1, true); trackOf()?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+      else document.querySelectorAll(".point")[first - 1]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 60);
   }
   async function undoAuto() {
     const u = ui.auto; if (!u) return; ui.auto = null;

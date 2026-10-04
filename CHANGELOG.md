@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 4, 2026
 
 **Test board**
+- **Swipe fixes:** the dots, "Line X of Y" and the line's height now keep up while you swipe instead of catching up a second later (so the points-per-person chart no longer shows over a line), and the counter can't show "Line NaN" after Fill lines anymore.
 - **Swipe between lines on phones.** Each line fills the screen; swipe left or right, or use the arrows and dots above it ("Line 3 of 7"). It opens on the line we're on, and slides to the next line once a line is finished (every point has a result, and every goal has its scorer and assist). "+ Add line" is the last card. Laptops keep the grid.
 - **NOW marker.** The first point without a result is highlighted in yellow with a NOW tag, its line gets a yellow outline, and a "Now: Pt 7" button jumps straight to it.
 - **Zone spots are the same for every tournament** (handlers, deep deep, short deep and their backups) until someone changes them, instead of being set per tournament.
