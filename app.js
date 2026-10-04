@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.04.2"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.04.3"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -78,6 +78,7 @@
     try {
       const d = await rpc("app_load");
       S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [] };
+      serverLines.clear(); S.points.forEach(x => serverLines.set(x.id, JSON.parse(JSON.stringify(x))));
       store.set("cache", S);
       if (!game()) ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null;
       if (first) { connect(); if (OWNER) loadOwner(); }
@@ -140,7 +141,11 @@
     } finally { pending--; }
   }
 
-  const savePoint = pt => save("app_save_point", { x: pt }, () => upsertLocal("points", pt));
+  // The last copy of each line the server confirmed. Edits are applied on top of it, so two
+  // phones changing the same line at once both keep their change (see patchPoint).
+  const serverLines = new Map();
+  const confirmLine = row => { if (!row || !row.id) return; serverLines.set(row.id, JSON.parse(JSON.stringify(row))); const cur = S.points.find(p => p.id === row.id); if (cur) cur.updated_at = row.updated_at; };
+  const savePoint = pt => save("app_save_point", { x: pt }, () => upsertLocal("points", pt)).then(row => { confirmLine(row); return row; });
   const saveGame = g => save("app_save_game", { g }, () => upsertLocal("games", g));
   const savePlayer = p => save("app_save_player", { p }, () => upsertLocal("players", p));
 
@@ -607,7 +612,7 @@
 
   // ---------- sheets (picker, menus, forms) ----------
   function openSheet(s) { ui.sheet = s; renderSheet(); setTimeout(() => { const f = $("#sheet-root [autofocus]"); if (f && matchMedia("(min-width:760px)").matches) f.focus(); }, 30); }
-  function closeSheet() { const s = ui.sheet; ui.sheet = null; renderSheet(); if (s && s.type === "ratio" && s.resolve) s.resolve("keep"); }
+  function closeSheet() { const s = ui.sheet; ui.sheet = null; renderSheet(); if (s && s.type === "ratio" && s.resolve) s.resolve("keep"); setTimeout(() => { if (typeof checkVersion === "function") checkVersion(); }, 300); }
 
   function renderSheet() {
     const root = $("#sheet-root"), s = ui.sheet;
@@ -1027,9 +1032,12 @@
     [order[i], order[j]] = [order[j], order[i]];
     save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((pid, k) => { const x = S.points.find(p => p.id === pid); if (x) x.pos = k + 1; }));
   }
-  function patchPoint(id, fn) {
-    const pt = S.points.find(x => x.id === id); if (!pt) return;
-    const next = JSON.parse(JSON.stringify(pt));
+  // Apply one change (fn) to a line. It shows right away; the save says which version of the line
+  // it was based on. If another phone changed the line in the meantime the server says "stale":
+  // reload, re-apply this same change to the new version, and save again. Changes to one line are
+  // saved one at a time, in order.
+  function buildLine(src, fn) {
+    const next = JSON.parse(JSON.stringify(src));
     next.outcomes = outs(next); fn(next);
     next.plays = playsOf(next);
     const ids = new Set((next.lineup || []).map(x => x.p));
@@ -1039,7 +1047,47 @@
       if (o.assist && o.assist !== "none" && !ids.has(o.assist)) o.assist = null;
       return o;
     });
-    savePoint(next);
+    return next;
+  }
+  const lineQueue = new Map(), lineWaiting = new Map();
+  function patchPoint(id, fn) {
+    const pt = S.points.find(x => x.id === id); if (!pt) return;
+    upsertLocal("points", buildLine(pt, fn)); render();   // show it now
+    lineWaiting.set(id, (lineWaiting.get(id) || 0) + 1);
+    const run = async () => {
+      pending++;
+      try {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const base = serverLines.get(id) || S.points.find(x => x.id === id);
+          if (!base) return;
+          const next = buildLine(base, fn);
+          try {
+            const row = await rpc("app_save_point", { x: { ...next, expect: base.updated_at || null } });
+            confirmLine(row); ping(); setSync("live");
+            return;
+          } catch (e) {
+            if (/stale/.test(e.message || "")) {
+              const d = await rpc("app_load");   // someone else changed this line: get their version
+              const fresh = (d.points || []).find(x => x.id === id);
+              if (!fresh) return;
+              serverLines.set(id, fresh);
+              continue;
+            }
+            if (e.code === "bad_code") { CODE = ""; store.del("code"); renderGate("The team passcode changed. Enter the new one."); return; }
+            setSync("offline"); toast("Couldn't save. Check your connection.", 3500); scheduleRefresh();
+            return;
+          }
+        }
+      } finally {
+        pending--;
+        const left = (lineWaiting.get(id) || 1) - 1; lineWaiting.set(id, left);
+        // Nothing else queued for this line: show exactly what the server has.
+        if (!left && serverLines.has(id)) { upsertLocal("points", JSON.parse(JSON.stringify(serverLines.get(id)))); render(); }
+      }
+    };
+    const p = (lineQueue.get(id) || Promise.resolve()).then(run, run);
+    lineQueue.set(id, p);
+    return p;
   }
   // The point after point k of a line: the next slot in the same line, or the first point of the next line.
   function nextPointAfter(lineId, k) {
@@ -1115,7 +1163,7 @@
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
     if (a === "edit-lines") { closeSheet(); ui.editLines = { sel: new Set(), confirm: false }; ui.undoDel = null; render(); window.scrollTo(0, 0); return; }
-    if (a === "edit-done") { ui.editLines = null; render(); return; }
+    if (a === "edit-done") { ui.editLines = null; render(); setTimeout(checkVersion, 300); return; }
     if (a === "edit-delete") { if (!ui.editLines.confirm) { ui.editLines.confirm = true; render(); return; } deleteSelected(); return; }
     if (a === "undo-delete") { undoDelete(); return; }
     if (a === "undo-delete-done") { ui.undoDel = null; render(); return; }
@@ -1141,7 +1189,12 @@
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
       if (s.zone) { const z = s.zone; saveZone(n => { n[z] = [...n[z], pid]; }); renderSheet(); return; }
-      patchPoint(s.pointId, pt => { pt.lineup = pt.lineup || []; if (s.current) { const slot = pt.lineup.find(x => x.p === s.current); if (slot) slot.p = pid; } else if (pt.lineup.length < SLOTS) pt.lineup.push({ p: pid, r: "" }); });
+      patchPoint(s.pointId, pt => {
+        pt.lineup = pt.lineup || [];
+        if (pt.lineup.some(x => x.p === pid)) return;   // already on (maybe added from another phone)
+        if (s.current) { const slot = pt.lineup.find(x => x.p === s.current); if (slot) slot.p = pid; }
+        else if (pt.lineup.length < SLOTS) pt.lineup.push({ p: pid, r: "" });
+      });
       closeSheet(); return;
     }
     if (a === "pick-remove") { const s = ui.sheet; patchPoint(s.pointId, pt => { pt.lineup = pt.lineup.filter(x => x.p !== s.current); }); closeSheet(); return; }
@@ -1274,7 +1327,9 @@
     try {
       const r = await fetch("version.json?" + Date.now(), { cache: "no-store" });
       const { v } = await r.json();
-      if (v && v !== APP_VERSION && pending === 0) {
+      // Don't reload under someone mid-edit (typing, a sheet open, dragging lines); try again later.
+      const busy = ui.sheet || ui.drag || ui.editLines || (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName));
+      if (v && v !== APP_VERSION && pending === 0 && !busy) {
         const u = new URL(location.href); u.searchParams.set("v", v); location.replace(u.toString());
       }
     } catch (e) {}
