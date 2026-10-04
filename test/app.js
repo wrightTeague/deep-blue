@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.5"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.6"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -248,6 +248,63 @@
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
+    if (ui.tab === "points") afterPoints();
+  }
+
+  // ---------- phone swipe between lines ----------
+  // ui.swipe = { game, i }: which card each phone is looking at, kept across re-renders (every
+  // save re-draws the page). A new game opens on the NOW line. After a line is finished
+  // (ui.advanceTo set by the result / assist taps) it slides on to the next one.
+  function trackOf() { return document.getElementById("pointsTrack"); }
+  function cardStep(t) { const c = t.children[0], gap = parseFloat(getComputedStyle(t).columnGap) || 0; return c ? c.getBoundingClientRect().width + gap : t.clientWidth; }
+  function showLine(i, smooth) {
+    const t = trackOf(); if (!t) return;
+    i = Math.max(0, Math.min(i, t.children.length - 1));
+    ui.swipe = { game: ui.gameId, i };
+    if (swipeMode()) t.scrollTo({ left: i * cardStep(t), behavior: smooth ? "smooth" : "instant" });
+    paintPager(i);
+  }
+  function paintPager(i) {
+    const t = trackOf(); if (!t) return;
+    // The swipe area takes the height of the line being shown (not the tallest line).
+    const c = t.children[Math.max(0, Math.min(i, t.children.length - 1))];
+    t.style.height = swipeMode() && c ? (c.offsetHeight + 12) + "px" : "";
+    const n = t.children.length - 1, txt = document.getElementById("pagerText");
+    if (txt) txt.textContent = i >= n ? "New line" : `Line ${i + 1} of ${n}`;
+    document.querySelectorAll("#lineDots .dot").forEach((d, k) => d.setAttribute("aria-current", k === i ? "true" : "false"));
+  }
+  function afterPoints() {
+    const t = trackOf(); if (!t) return;
+    const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--top-h", top.offsetHeight + "px");
+    const g = game(), lines = g ? gamePoints(g.id) : [], now = nowPoint(lines);
+    if (!ui.swipe || ui.swipe.game !== ui.gameId) ui.swipe = { game: ui.gameId, i: now ? now.line : Math.max(lines.length - 1, 0) };
+    showLine(ui.swipe.i, false);
+    if (ui.advanceTo != null) { const to = ui.advanceTo; ui.advanceTo = null; if (swipeMode()) setTimeout(() => { showLine(to, true); setTimeout(nowRowToMiddle, 350); }, 700); }
+    let tm = null;
+    t.addEventListener("scroll", () => {
+      clearTimeout(tm);
+      tm = setTimeout(() => { const i = Math.round(t.scrollLeft / cardStep(t)); ui.swipe = { game: ui.gameId, i }; paintPager(i); }, 60);
+    }, { passive: true });
+  }
+  // Scroll the page (up or down only) so the NOW row sits in the middle of the screen.
+  function nowRowToMiddle() {
+    const r = document.getElementById("nowRow"); if (!r) return;
+    const box = r.getBoundingClientRect();
+    window.scrollTo({ top: Math.max(0, window.scrollY + box.top - (window.innerHeight - box.height) / 2), behavior: "smooth" });
+  }
+  function jumpNow() {
+    const g = game(), now = g ? nowPoint(gamePoints(g.id)) : null; if (!now) return;
+    if (swipeMode()) { showLine(now.line, true); setTimeout(nowRowToMiddle, 350); }
+    else nowRowToMiddle();
+  }
+  // Call before a tap that may finish a line; call the returned function after it.
+  function watchFinish(lineId) {
+    const before = S.points.find(x => x.id === lineId), was = before ? lineFinished(before) : true;
+    return () => {
+      const pt = S.points.find(x => x.id === lineId); if (!pt || was || !lineFinished(pt)) return;
+      const i = gamePoints(pt.game_id).findIndex(x => x.id === lineId);
+      ui.advanceTo = i + 1; render();
+    };
   }
 
   function fmtDate(d) {
@@ -261,11 +318,24 @@
   }
 
   // ---------- render: points ----------
+  // The point we're on: the first point in the game without a result.
+  // → { line: index, k: point within the line, n: point number } or null when every point has one.
+  function nowPoint(lines) {
+    let n = 0;
+    for (let i = 0; i < lines.length; i++) { const o = outs(lines[i]); for (let k = 0; k < o.length; k++) { n++; if (!o[k].result) return { line: i, k, n }; } }
+    return null;
+  }
+  // A line is finished once every point has a result and every goal has its scorer and assist.
+  const lineFinished = pt => outs(pt).every(o => o.result && (o.result !== "us" || (o.scorer && o.assist)));
+  // Phones show one line at a time and swipe sideways; laptops keep the grid.
+  const swipeMode = () => matchMedia("(max-width:759px)").matches;
+
   function renderPoints() {
     const g = game(); if (!g) return noGame();
-    const lines = gamePoints(g.id), st = computeStats(lines).team;
+    const lines = gamePoints(g.id), st = computeStats(lines).team, now = nowPoint(lines);
     let next = 1;
-    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restFor(g, lines, i)); }).join("");
+    const cards = lines.map((pt, i) => { const from = next; next += playsOf(pt); return lineCard(pt, i, from, restFor(g, lines, i), now && now.line === i ? now.k : -1); }).join("");
+    const total = lines.length + 1, dots = Array.from({ length: total }, (_, i) => `<button class="dot${i === lines.length ? " add" : ""}${now && now.line === i ? " now" : ""}" data-act="go-line" data-i="${i}" aria-label="${i === lines.length ? "Add a line" : "Line " + (i + 1)}"></button>`).join("");
     return `
       <div class="game-head">
         <div>${tourOf(g) ? `<p class="eyebrow">${esc(tourOf(g).name)}${g.game_date ? " · " + fmtDate(g.game_date) : ""}</p>` : ""}<h2 class="sec">${esc(g.name)}</h2></div>
@@ -276,7 +346,12 @@
         <span class="row" style="gap:5px"><span class="role" data-r="C">C</span>Cut</span>
         <span>Tap a letter to change a role, a name to swap.</span>
       </div>
-      <div class="points">${cards}<div class="add-wrap"><button class="add-point" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="add-point paste" data-act="paste-new">+ Paste as new line</button>' : ""}</div></div>
+      <div class="line-nav">
+        <div class="pager"><button class="icon-btn" data-act="go-line" data-dir="-1" aria-label="Previous line">‹</button><span class="pager-text" id="pagerText">Line 1 of ${lines.length}</span><button class="icon-btn" data-act="go-line" data-dir="1" aria-label="Next line">›</button></div>
+        ${now ? `<button class="now-btn" data-act="jump-now">Now: Pt ${now.n}</button>` : (lines.length ? `<span class="now-done">Every point has a result</span>` : "")}
+        <div class="dots" id="lineDots">${dots}</div>
+      </div>
+      <div class="points" id="pointsTrack">${cards}<div class="add-wrap"><button class="add-point" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="add-point paste" data-act="paste-new">+ Paste as new line</button>' : ""}</div></div>
       ${pointsChart(lines)}`;
   }
 
@@ -291,7 +366,7 @@
     </div>`;
   }
 
-  function lineCard(pt, i, from, rest) {
+  function lineCard(pt, i, from, rest, nowK) {
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
     const goals = new Map(), assists = new Map();
@@ -323,9 +398,9 @@
     };
     const rows = o.map((x, k) => {
       const tag = outcomeTag(x);
-      return `<div class="pt-row">
+      return `<div class="pt-row${k === nowK ? " now" : ""}"${k === nowK ? ' id="nowRow"' : ""}>
         <div class="pt-line">
-          <span class="pt-n">Pt ${from + k}</span>
+          ${k === nowK ? '<span class="now-pill">NOW</span>' : ""}<span class="pt-n">Pt ${from + k}</span>
           <div class="seg" role="group" aria-label="Point ${from + k}: start on offense or defense">
             <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="O" aria-pressed="${x.start_on === "O"}">O</button>
             <button data-act="od" data-id="${pt.id}" data-k="${k}" data-v="D" aria-pressed="${x.start_on === "D"}">D</button>
@@ -340,7 +415,7 @@
       </div>`;
     }).join("");
     const done = o.every(x => x.result);
-    return `<article class="point ${done ? "done" : ""}">
+    return `<article class="point ${done ? "done" : ""}${nowK >= 0 ? " current" : ""}" data-line="${i}">
       <div class="point-head">
         <h3>Line ${i + 1}</h3>
         <span class="tag">${n === 1 ? "Pt " + from : "Pts " + from + "–" + to}</span>
@@ -399,27 +474,24 @@
   }
 
   // ---------- zone spots ----------
-  // Zone spots belong to the tournament (they don't change game to game). A game outside a
-  // tournament keeps its own.
-  const zoneOf = g => { const t = tourOf(g); return (t ? t.zone : g && g.zone) || {}; };
+  // Zone spots belong to the team and carry across every tournament until someone changes them.
+  // g is ignored (kept so callers read the same as before).
+  const zoneOf = g => (S.team && S.team.zone) || {};
   function saveZone(fn) {
-    const g = game(); if (!g) return;
-    const t = tourOf(g), next = JSON.parse(JSON.stringify(zoneOf(g)));
+    const next = JSON.parse(JSON.stringify(zoneOf()));
     ZONES.forEach(([k]) => { next[k] = next[k] || []; next[k + "_ok"] = next[k + "_ok"] || []; });
     fn(next);
-    if (t) save("app_save_tournament_zone", { p_id: t.id, z: next }, () => { t.zone = next; });
-    else patchGame(x => { x.zone = next; });
+    save("app_save_team_zone", { z: next }, () => { S.team.zone = next; });
   }
   function renderZone() {
-    const g = game(); if (!g) return "";
-    const z = zoneOf(g), tour = tourOf(g);
+    const z = zoneOf();
     const chips = (k, name) => (z[k] || []).map((id, i) => { const p = P(id); return `<div class="chip${/_ok$/.test(k) ? " backup" : ""}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="zone-remove" data-z="${k}" data-i="${i}" aria-label="Remove ${esc(label(p))} from ${name}">×</button></div>`; }).join("");
     const cols = ZONES.map(([k, name]) => `<section class="zone-col"><h3>${name}</h3>
         ${chips(k, name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm" data-act="zone-add" data-z="${k}" style="align-self:flex-start">+ Add</button>
         <h4 class="zone-ok">Can play it if needed</h4>
         ${chips(k + "_ok", name) || '<p class="empty-note">Nobody yet.</p>'}<button class="btn sm ghost" data-act="zone-add" data-z="${k}_ok" style="align-self:flex-start">+ Add backup</button>
       </section>`).join("");
-    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">${tour ? `For every game in <b>${esc(tour.name)}</b>.` : `For ${esc(g.name)} (not in a tournament).`} The line maker gives every line 2 handlers, a deep deep and a short deep, using backups only when nobody on the main list fits. Anyone can play cup.</p><div class="zone-grid">${cols}</div></section>`;
+    return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">The same for every game and tournament until you change them. The line maker gives every line 2 handlers, a deep deep and a short deep, using backups only when nobody on the main list fits. Anyone can play cup.</p><div class="zone-grid">${cols}</div></section>`;
   }
 
   // ---------- render: stats ----------
@@ -479,7 +551,7 @@
         <div class="seg" role="group" aria-label="Matchup"><button type="button" data-act="add-g" data-v="W" aria-pressed="${ui.addG === "W"}">W</button><button type="button" data-act="add-g" data-v="M" aria-pressed="${ui.addG !== "W"}">M</button></div>
         <button class="btn primary sm" type="submit">Add</button>
       </form>
-      <input class="line-in" id="rosterFilter" placeholder="Search roster" value="${esc(ui.rosterFilter)}" style="width:100%;max-width:340px">
+      <input class="line-in" id="rosterFilter" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search roster" value="${esc(ui.rosterFilter)}" style="width:100%;max-width:340px">
       <p class="muted" style="font-size:14px;margin:8px 0 0">The nickname is what shows on line cards. Tap the dot to mark a captain (C) or president (P). "Out" hides someone from the player picker without deleting their stats.</p>
       <div class="roster-cols">${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}</div>
       ${renderZone()}
@@ -606,9 +678,9 @@
         <ul class="fill-rules">
           <li>2 captains or president per line, whoever has rested longest</li>
           <li>3 women and 4 men (asks first if the men fall a point behind over the day)</li>
-          <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set${tourOf(g) ? " for this tournament" : ""}.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
+          <li>${zoneSet ? "2 handlers, a deep deep and a short deep on every line, from Zone spots (backups only if needed)" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back, people out are skipped</li>
-          <li>${ui.owner ? "Using your private settings (rookies and pairs)" : "Private settings are locked on this device, so rookies and pairs aren't used"}</li>
+          ${ui.owner ? "<li>Using your private settings</li>" : ""}
           <li>Players you've already placed stay put. Lines with results aren't touched.</li>
         </ul>
         <div class="row"><button class="btn primary" data-act="fill-go">Fill</button><button class="btn ghost" data-act="close">Cancel</button></div>
@@ -699,17 +771,28 @@
   }
 
   // ---------- private settings (only whoever has the private code) ----------
-  async function loadOwner(fromForm) {
+  // Private settings have no visible way in. Typing the private code into "Search roster" and
+  // pressing Enter / Go tries it quietly: a wrong code just leaves the search as it was.
+  async function loadOwner() {
     try {
       const d = await sb.rpc("app_owner_load", { p_token: TOKEN, p_code: CODE, p_owner: OWNER });
       if (d.error) throw d.error;
       ui.owner = { rookies: d.data.rookies || [], apart: toGroups(d.data.apart), together: toGroups(d.data.together) };
-      store.set("owner", OWNER); if (fromForm) toast("Unlocked on this device");
+      store.set("owner", OWNER);
     } catch (e) {
-      ui.owner = null; OWNER = ""; store.del("owner");
-      if (fromForm) toast(/bad_owner_code/.test(e.message || "") ? "That private code didn't work" : "Couldn't reach the board");
+      if (/bad_owner_code/.test((e && e.message) || "")) { OWNER = ""; store.del("owner"); }
+      ui.owner = null;
     }
     render();
+  }
+  async function tryOwner(code) {
+    if (!code || ui.owner) return false;
+    const d = await sb.rpc("app_owner_load", { p_token: TOKEN, p_code: CODE, p_owner: code });
+    if (d.error || !d.data) return false;
+    OWNER = code; ui.owner = { rookies: d.data.rookies || [], apart: toGroups(d.data.apart), together: toGroups(d.data.together) };
+    store.set("owner", OWNER); ui.rosterFilter = ""; render();
+    setTimeout(() => document.querySelector(".card.private")?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+    return true;
   }
   // Keep apart / together are stored as one person and a list: [{ p, with: [ids] }].
   // Older plain pairs ([a, b]) get folded into that shape.
@@ -729,10 +812,7 @@
     if (error) { toast("Couldn't save private settings", 3000); loadOwner(); }
   }
   function privateCard() {
-    if (!ui.owner) return `<section class="card private"><h3>Private settings</h3>
-      <p class="muted" style="margin:0">Rookies and pairs for the line maker. Only someone with the private code can see or change them.</p>
-      <form class="row" id="ownerForm"><input class="line-in" id="ownerCode" type="password" placeholder="Private code" autocomplete="off" style="flex:1;min-width:160px"><button class="btn sm" type="submit">Unlock</button></form>
-    </section>`;
+    if (!ui.owner) return "";
     const people = sortPlayers(activePlayers()), rk = new Set(ui.owner.rookies);
     const opts = people.map(p => `<option value="${p.id}">${esc(label(p))}</option>`).join("");
     const groups = k => { const verb = k === "apart" ? "stays away from" : "goes with"; return `${ui.owner[k].map((g, i) => {
@@ -834,10 +914,13 @@
       save("app_delete_game", { p_id: gid }, () => { removeLocal("games", gid); S.points = S.points.filter(x => x.game_id !== gid); ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null; store.set("game", ui.gameId); });
       return;
     }
-    if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
+    if (a === "add-point") { const pts = gamePoints(ui.gameId); newPointAfter(null, false); if (swipeMode()) showLine(pts.length, false); setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); void pts; return; }
     if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
     if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
+    if (a === "go-line") { const cur = (ui.swipe && ui.swipe.i) || 0; showLine(el.dataset.dir ? cur + +el.dataset.dir : +el.dataset.i, true); return; }
+    if (a === "jump-now") { jumpNow(); return; }
     if (a === "result") {
+      const done = watchFinish(id);
       const k = +el.dataset.k, cur = outs(S.points.find(x => x.id === id))[k], res = cur.result === el.dataset.v ? "" : el.dataset.v;
       // Whoever gets scored on receives: they scored -> we start next point on O; we scored -> D.
       const nextStart = res === "them" ? "O" : res === "us" ? "D" : "";
@@ -850,10 +933,11 @@
         const no = outs(S.points.find(x => x.id === nxt.lineId))[nxt.k];
         if (!no.result) patchPoint(nxt.lineId, pt => { pt.outcomes[nxt.k].start_on = nextStart; });
       }
+      done();
       return;
     }
     if (a === "set-goal") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = v; if (o.assist === v) o.assist = null; }); return; }
-    if (a === "set-assist") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); return; }
+    if (a === "set-assist") { const done = watchFinish(id), k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); done(); return; }
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
@@ -873,7 +957,7 @@
     }
     if (a === "o-del") { const k = el.dataset.k, i = +el.dataset.i; ui.owner[k] = ui.owner[k].filter((_, j) => j !== i); saveOwner(); return; }
     if (a === "o-unwith") { const k = el.dataset.k, i = +el.dataset.i, g = ui.owner[k][i]; g.with = g.with.filter(x => x !== el.dataset.p); saveOwner(); return; }
-    if (a === "o-lock") { OWNER = ""; store.del("owner"); ui.owner = null; render(); toast("Private settings locked on this device"); return; }
+    if (a === "o-lock") { OWNER = ""; store.del("owner"); ui.owner = null; render(); toast("Locked"); return; }
     if (a === "pick-sort") { ui.pickSort = el.dataset.v; store.set("pickSort", ui.pickSort); renderSheet(); return; }
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
@@ -943,7 +1027,7 @@
 
   document.addEventListener("change", e => {
     const el = e.target;
-    if (el.id === "gameSel") { ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
+    if (el.id === "gameSel") { ui.swipe = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
     if (a === "o-with") { const g = ui.owner[el.dataset.k][+el.dataset.i]; if (el.value && !g.with.includes(el.value)) { g.with.push(el.value); saveOwner(); } return; }
@@ -955,7 +1039,10 @@
     if (e.target.id === "rosterFilter") { ui.rosterFilter = e.target.value; render(); }
   });
 
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && ui.sheet) closeSheet(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && ui.sheet) closeSheet();
+    if (e.key === "Enter" && e.target.id === "rosterFilter") { e.preventDefault(); tryOwner(e.target.value.trim()); }
+  });
 
   document.addEventListener("submit", e => {
     e.preventDefault();
@@ -985,10 +1072,6 @@
         openSheet({ type: "game-form", tour: t.id });
       }
       return;
-    }
-    if (f.id === "ownerForm") {
-      const v = $("#ownerCode").value.trim(); if (!v) return;
-      OWNER = v; loadOwner(true); return;
     }
     if (f.id === "codeForm") {
       const v = $("#newCode").value.trim(); if (v.length < 4) { toast("Use at least 4 characters"); return; }
