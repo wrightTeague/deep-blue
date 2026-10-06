@@ -2,6 +2,16 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 6, 2026
+
+**Test board**
+- **New Practice tab.** "Check in today's practice", then tap everyone who's there; it saves as you go and shows live on everyone's board. You can add an earlier practice or change a practice's date.
+- **Attendance since the last tournament.** The Practice tab lists how many practices each person has made since the last tournament, and starts over after each one.
+- **Scrim teams.** On a practice, "Split into 2 teams" makes Dark and Light with even women and men, captains split up and handlers spread out. Shuffle for a new split. People who check in later join the smaller side.
+- **Fill lines uses attendance** (a switch in Fill lines, on by default). The best attendance goes out first at a tournament and gets a little more time: someone at every practice plays about 1–2 more points a day than average.
+- **Late sign-ups.** In the game menu (⋯), "Late sign-ups" marks who signed up for that tournament late. Fill lines starts them after everyone else's first shift. A second option, "Start later + less time", also gives them a couple fewer points over the day.
+- **The player picker shows practices** (like "3/4 practices") and tags late sign-ups.
+
 ## Oct 4, 2026 (later)
 
 **Real board and test board**

@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.13"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.14"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -37,7 +37,7 @@
   // ---------- state ----------
   let CODE = store.get("code", "");
   let OWNER = store.get("owner", "");  // private settings code, only on this device
-  let S = { team: null, tournaments: [], players: [], games: [], points: [] };
+  let S = { team: null, tournaments: [], players: [], games: [], points: [], practices: [] };
   const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "points"))), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
   // Copied line players, kept on this device so they can be pasted into any game.
@@ -46,6 +46,10 @@
   ui.owner = null;                     // { rookies, apart, together } once unlocked with the private code
   ui.auto = null;                      // last auto-fill, for Undo: { changed:[{id,lineup}], created:[id], text }
   ui.pairing = store.get("pairing", "rotate");   // Fill lines captain pairs: "rotate", "usual" or "rest"
+  ui.useAtt = store.get("useAtt", true);           // Fill lines: practice attendance nudges who goes out first
+  ui.lateMode = store.get("lateMode", "start");    // Fill lines, late sign-ups: "start" (start later) or "less" (start later, play a bit less)
+  ui.practiceId = null;                            // practice open for check-in
+  ui.scrim = null;                                 // { pid, A: [ids], B: [ids] } scrim teams for that practice (this phone only)
   ui.pickSort = store.get("pickSort", "sat"); // player picker order for lines: "sat" (most lines sat first), "played" (fewest lines first) or "az"
 
   const P = id => S.players.find(p => p.id === id);
@@ -78,7 +82,7 @@
   async function load(first) {
     try {
       const d = await rpc("app_load");
-      S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [] };
+      S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [], practices: d.practices || [] };
       serverLines.clear(); S.points.forEach(x => serverLines.set(x.id, JSON.parse(JSON.stringify(x))));
       store.set("cache", S);
       if (!game()) ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null;
@@ -227,7 +231,7 @@
   const restFor = (g, lines, idx) => { const pg = prevGameOf(g); return restBefore(lines, idx, pg ? gamePoints(pg.id) : null); };
 
   // ---------- render: shell ----------
-  const TABS = [["points", "Points"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
+  const TABS = [["points", "Points"], ["practice", "Practice"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
 
   function render() {
     if (!S.team) return;
@@ -254,7 +258,7 @@
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
         <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
       </div></header>
-      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : renderPoints()}</main>
+      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
@@ -530,6 +534,133 @@
     return `<section class="zone-sec"><h2 class="sec">Zone spots</h2><p class="muted" style="margin:8px 0 0">The same for every game and tournament until you change them. The line maker gives every line 2 handlers, a deep deep and a short deep, using backups only when nobody on the main list fits. Anyone can play cup.</p><div class="zone-grid">${cols}</div></section>`;
   }
 
+  // ---------- practice: check-in, attendance, scrim teams ----------
+  const todayISO = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const practices = () => (S.practices || []).slice().sort((a, b) => (a.practice_date < b.practice_date ? -1 : a.practice_date > b.practice_date ? 1 : 0));
+  const isLead = p => p && (p.badge === "C" || p.badge === "P");
+  // Attendance counts practices after the last tournament before `date` (up to and including
+  // `date`). tourId is the tournament the lines are for, so it never counts as "the last one".
+  // → { since: tournament or null, list: practices, n, count: Map id → practices attended }
+  function attendanceFor(date, tourId) {
+    date = date || todayISO();
+    const since = tours().filter(t => t.start_date && t.start_date < date && t.id !== tourId).sort((a, b) => (a.start_date < b.start_date ? -1 : 1)).pop() || null;
+    const list = practices().filter(x => x.practice_date <= date && (!since || x.practice_date > since.start_date));
+    const count = new Map();
+    list.forEach(x => (x.attended || []).forEach(id => count.set(id, (count.get(id) || 0) + 1)));
+    return { since, list, n: list.length, count };
+  }
+  // Attendance window for a game: the practices leading up to its tournament.
+  const attendanceForGame = g => { const t = tourOf(g); return attendanceFor((t && t.start_date) || (g && g.game_date) || todayISO(), t ? t.id : null); };
+  const lateOf = g => { const t = tourOf(g); return new Set((t && Array.isArray(t.late) ? t.late : []).filter(id => P(id))); };
+  // Line-maker nudge from attendance, in "lines sat": +1 for someone who made every practice
+  // versus a teammate who made none, centred on the team average. Captains and president
+  // rotate on their own, so they're left out. Tuned so regulars get ~1–2 extra points a day.
+  function attendancePriority(att) {
+    if (!att.n) return {};
+    const ps = activePlayers().filter(p => !isLead(p)); if (!ps.length) return {};
+    const avg = ps.reduce((a, p) => a + (att.count.get(p.id) || 0), 0) / ps.length;
+    return Object.fromEntries(ps.map(p => [p.id, ((att.count.get(p.id) || 0) - avg) / att.n]));
+  }
+  const sinceText = att => att.since ? `since ${esc(att.since.name)}${att.since.start_date ? " (" + fmtDate(att.since.start_date) + ")" : ""}` : "so far";
+
+  // Scrim teams: captains split evenly, then each matchup, then handlers and (if private
+  // settings are unlocked) rookies spread out. People who check in later join the smaller side.
+  function scrimPlace(teams, p) {
+    const rk = ui.owner ? new Set(ui.owner.rookies) : new Set(), hz = new Set(zoneOf().handlers || []);
+    const cat = x => (isLead(x) ? "L" : hz.has(x.id) ? "H" : rk.has(x.id) ? "R" : "");
+    const score = side => { const ps = teams[side].map(P).filter(Boolean);
+      return (isLead(p) ? 10 : 1) * ps.filter(x => cat(x) === cat(p) && cat(p)).length + 3 * ps.filter(x => (x.gender || "") === (p.gender || "")).length + ps.length * 0.5; };
+    const a = score("A"), b = score("B");
+    teams[a < b ? "A" : b < a ? "B" : Math.random() < 0.5 ? "A" : "B"].push(p.id);
+  }
+  function scrimSplit(ids) {
+    const rk = ui.owner ? new Set(ui.owner.rookies) : new Set(), hz = new Set(zoneOf().handlers || []);
+    const ps = ids.map(P).filter(Boolean).map(p => ({ p, r: Math.random() }));
+    const rank = p => (isLead(p) ? 0 : hz.has(p.id) ? 1 : rk.has(p.id) ? 2 : 3);
+    ps.sort((x, y) => rank(x.p) - rank(y.p) || x.r - y.r);
+    const teams = { A: [], B: [] }; ps.forEach(({ p }) => scrimPlace(teams, p));
+    return teams;
+  }
+  function scrimSync(pr) {
+    const s = ui.scrim; if (!s || s.pid !== pr.id) return null;
+    const here = new Set((pr.attended || []).filter(id => P(id)));
+    s.A = s.A.filter(id => here.has(id)); s.B = s.B.filter(id => here.has(id));
+    here.forEach(id => { if (!s.A.includes(id) && !s.B.includes(id)) scrimPlace(s, P(id)); });
+    return s;
+  }
+
+  function renderPractice() {
+    const today = todayISO(), all = practices(), att = attendanceFor(today, null);
+    const pr = ui.practiceId ? all.find(x => x.id === ui.practiceId) : null;
+    if (ui.practiceId && !pr) ui.practiceId = null;
+    const todays = all.find(x => x.practice_date === today);
+    const people = sortPlayers(activePlayers());
+    let open = "";
+    if (pr) {
+      const here = new Set((pr.attended || []).filter(id => P(id)));
+      const hp = people.filter(p => here.has(p.id)), w = hp.filter(p => p.gender === "W").length, m = hp.filter(p => p.gender === "M").length;
+      const chip = p => `<button class="tchip chk ${p.gender || "U"}" data-act="pr-mark" data-p="${p.id}" aria-pressed="${here.has(p.id)}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}</button>`;
+      const grp = (gnd, t) => { const list = people.filter(p => (p.gender || "") === gnd); return list.length ? `<h4>${t}</h4><div class="tchips">${list.map(chip).join("")}</div>` : ""; };
+      // Anyone checked in who's since been marked Out or removed still counts; show them too.
+      const extra = (pr.attended || []).filter(id => P(id) && !P(id).active).map(P);
+      const sc = scrimSync(pr);
+      const team = (k, name) => { const ps = sortPlayers(sc[k].map(P).filter(Boolean)), tw = ps.filter(p => p.gender === "W").length, tm = ps.filter(p => p.gender === "M").length;
+        return `<div class="scrim-team ${k}"><h4>${name} <span class="muted">${ps.length} · ${tw} W · ${tm} M</span></h4><div class="tchips">${ps.map(p => `<span class="nchip"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}</span>`).join("")}</div></div>`; };
+      open = `<section class="card practice-open">
+        <div class="row" style="justify-content:space-between;gap:8px">
+          <h3>${pr.practice_date === today ? "Today's practice" : "Practice"}</h3>
+          <button class="btn sm primary" data-act="pr-close">Done</button>
+        </div>
+        <div class="row" style="gap:10px"><input class="line-in" id="prDate" type="date" value="${esc(pr.practice_date)}" aria-label="Practice date"><span class="here-count"><b>${here.size} here</b> · ${w} W · ${m} M</span></div>
+        <p class="muted" style="margin:0;font-size:14px">Tap everyone who's here. It saves as you go, and anyone else on the board sees it live.</p>
+        ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
+        ${extra.length ? `<h4>Marked out, but checked in</h4><div class="tchips">${extra.map(chip).join("")}</div>` : ""}
+        <div class="scrim-box">
+          <div class="row" style="justify-content:space-between;gap:8px"><h4 style="margin:0">Scrim teams</h4>
+            <span class="row" style="gap:6px">${sc ? '<button class="btn sm" data-act="scrim-make">Shuffle</button><button class="btn sm ghost" data-act="scrim-clear">Hide</button>' : `<button class="btn sm" data-act="scrim-make" ${here.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}</span></div>
+          ${sc ? `<div class="scrim-teams">${team("A", "Dark")}${team("B", "Light")}</div><p class="muted" style="margin:0;font-size:13px">Even women and men, captains split, handlers spread out. People who check in later join the smaller side. Only on this phone.</p>` : `<p class="muted" style="margin:0;font-size:14px">Even women and men on each side, captains split up.</p>`}
+        </div>
+        <div class="row" style="justify-content:flex-end"><button class="btn sm danger ghost" data-act="pr-delete">${ui.prConfirm === pr.id ? "Tap again to delete this practice" : "Delete practice"}</button></div>
+      </section>`;
+    }
+    const counts = people.map(p => ({ p, n: att.count.get(p.id) || 0 })).sort((a, b) => b.n - a.n || label(a.p).localeCompare(label(b.p)));
+    const attRows = counts.map(({ p, n }) => `<div class="att-row"><span class="pl"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}</span><span class="att-bar"><i style="width:${att.n ? (n / att.n) * 100 : 0}%"></i></span><span class="att-n">${n}/${att.n}</span></div>`).join("");
+    const inWin = new Set(att.list.map(x => x.id));
+    const prRow = x => { const n = (x.attended || []).filter(id => P(id)).length; return `<li><button data-act="pr-open" data-id="${x.id}" ${x.id === ui.practiceId ? 'aria-current="true"' : ""}><span>${fmtDate(x.practice_date)}${x.practice_date === today ? " · today" : ""}</span><span class="meta">${n} here</span></button></li>`; };
+    const recent = all.filter(x => inWin.has(x.id)).reverse(), older = all.filter(x => !inWin.has(x.id)).reverse();
+    return `<h2 class="sec">Practice</h2>
+      ${pr ? "" : `<div class="row" style="margin:8px 0 14px"><button class="btn primary" data-act="pr-new">${todays ? "Open today's check-in" : "Check in today's practice"}</button><button class="btn ghost" data-act="pr-new-date">Add an earlier practice</button></div>`}
+      ${open}
+      <section class="card att-card">
+        <h3>Attendance <span class="muted">${sinceText(att)} · ${att.n} practice${att.n === 1 ? "" : "s"}</span></h3>
+        <p class="muted" style="margin:0;font-size:14px">Fill lines can use this: the best attendance starts the tournament and gets a little more time. It resets after each tournament.</p>
+        ${att.n ? `<div class="att-list">${attRows}</div>` : '<p class="empty-note">No practices checked in yet.</p>'}
+      </section>
+      ${all.length ? `<section class="card"><h3>Practices</h3><ul class="pr-list">${recent.map(prRow).join("")}</ul>${older.length ? `<h4 class="muted">Before ${esc(att.since ? att.since.name : "")}</h4><ul class="pr-list">${older.map(prRow).join("")}</ul>` : ""}</section>` : ""}`;
+  }
+  async function newPractice(date) {
+    const ex = practices().find(x => x.practice_date === date);
+    if (ex) { ui.practiceId = ex.id; render(); return; }
+    const x = { id: uid(), practice_date: date, attended: [], note: "" };
+    ui.practiceId = x.id; ui.scrim = null;
+    await save("app_save_practice", { x }, () => { S.practices = [...(S.practices || []), x]; });
+  }
+  const markWaiting = new Map();
+  async function markPractice(pid, player) {
+    const pr = (S.practices || []).find(x => x.id === pid); if (!pr) return;
+    const on = !(pr.attended || []).includes(player);
+    markWaiting.set(pid, (markWaiting.get(pid) || 0) + 1);
+    const v = await save("app_practice_mark", { p_id: pid, p_player: player, p_on: on }, () => { pr.attended = on ? [...(pr.attended || []), player] : (pr.attended || []).filter(id => id !== player); });
+    const left = markWaiting.get(pid) - 1; markWaiting.set(pid, left);
+    if (!left && Array.isArray(v)) { const cur = (S.practices || []).find(x => x.id === pid); if (cur) { cur.attended = v; render(); } }
+  }
+  async function markLate(tid, player) {
+    const t = tours().find(x => x.id === tid); if (!t) return;
+    const late = Array.isArray(t.late) ? t.late : [], on = !late.includes(player);
+    const v = await save("app_tournament_late_mark", { p_id: tid, p_player: player, p_on: on }, () => { t.late = on ? [...late, player] : late.filter(id => id !== player); });
+    if (Array.isArray(v)) { t.late = v; renderSheet(); }
+  }
+
   // ---------- render: stats ----------
   function renderStats() {
     const scope = ui.stats.scope;
@@ -647,7 +778,10 @@
         const sat = v.pts === 0 ? `<span class="rest b2b">just played</span>` : `sat ${plural(v.lines, "line")} (${plural(v.pts, "pt")})`;
         return `${sat} · ${plural(v.played, "line")} played`;
       };
-      const meta = p => s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
+      const att = !s.zone && g ? attendanceForGame(g) : null, lateSet = !s.zone ? lateOf(g) : new Set();
+      const attText = p => (att && att.n ? ` · <span class="att-mini">${att.count.get(p.id) || 0}/${att.n} practices</span>` : "") + (lateSet.has(p.id) ? ' · <span class="late-mini">late sign-up</span>' : "");
+      const meta0 = p => s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
+      const meta = p => meta0(p) + (taken.has(p.id) ? "" : attText(p));
       const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
       title = s.zone ? "Add to " + zoneName(s.zone) : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
@@ -680,6 +814,7 @@
       body = `<div class="menu-list">
         ${g ? '<button data-act="fill-open"><b>Fill lines automatically</b></button>' : ""}
         ${g && gamePoints(g.id).length ? '<button data-act="edit-lines"><b>Edit lines</b> (reorder or delete several)</button>' : ""}
+        ${t ? `<button data-act="late-open">Late sign-ups for ${esc(t.name)}${lateOf(g).size ? " (" + lateOf(g).size + ")" : ""}</button>` : ""}
         ${t ? `<button data-act="copy-game">Next game in ${esc(t.name)} (copy these lines)</button>
         <button data-act="new-game-tour">New empty game in ${esc(t.name)}</button>` : ""}
         <button data-act="new-game">New game</button>
@@ -717,6 +852,13 @@
             : ui.pairing === "usual" ? (() => { const up = DBLines.usualPairs(S.players, S.points); return up.length ? `Usual pairs two rounds out of three, then a mixed round: ${up.map(([a, b]) => esc(label(P(a))) + " + " + esc(label(P(b)))).join(" · ")}.` : "No usual pairs yet. Once captains have played together a few times, they'll show here."; })()
             : "Whoever has rested longest goes out together, so the same pairs tend to come back every few lines."}</p>
         </div>
+        ${(() => { const att = attendanceForGame(g), late = lateOf(g);
+          return `<div class="fill-pair"><span>Practice attendance</span>
+          <label class="fill-check" style="margin:0"><input type="checkbox" id="fillAtt" data-act="fill-att" ${ui.useAtt ? "checked" : ""}><span>Best attendance starts and gets a little more time</span></label>
+          <p class="muted fill-pair-note">${att.n ? `${att.n} practice${att.n === 1 ? "" : "s"} ${sinceText(att)}. Someone at every practice gets about 1–2 more points a day than average; someone at none, about that much less.` : `No practices checked in ${sinceText(att)}, so this does nothing yet.`}</p></div>
+          ${late.size ? `<div class="fill-pair"><span>Late sign-ups (${late.size})</span>
+          <div class="seg" role="group" aria-label="Late sign-ups">${[["start", "Start later"], ["less", "Start later + less time"]].map(([v, t]) => `<button data-act="fill-late" data-v="${v}" aria-pressed="${ui.lateMode === v}">${t}</button>`).join("")}</div>
+          <p class="muted fill-pair-note">${ui.lateMode === "less" ? "They go out after everyone's first shift and play a couple fewer points over the day." : "They go out after everyone's first shift, then rotate like everyone else."} ${[...late].map(id => esc(label(P(id)))).join(", ")}.</p></div>` : ""}`; })()}
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules">
           <li>2 captains or president per line, whoever has rested longest goes first</li>
@@ -735,6 +877,21 @@
         <p style="margin:0">Make Line ${s.lineNo} <b>5 men / 2 women</b> to catch up?</p>
         <div class="row"><button class="btn primary" data-act="ratio-five">Yes, 5 men / 2 women</button><button class="btn" data-act="ratio-keep">Keep 4 men / 3 women</button></div>
       </div>`;
+    } else if (s.type === "late") {
+      const t = tours().find(x => x.id === s.tid);
+      const late = new Set(t && Array.isArray(t.late) ? t.late : []), people = sortPlayers(activePlayers());
+      title = "Late sign-ups";
+      const chip = p => `<button class="tchip chk ${p.gender || "U"}" data-act="late-mark" data-p="${p.id}" aria-pressed="${late.has(p.id)}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}</button>`;
+      const grp = (gnd, h) => { const list = people.filter(p => (p.gender || "") === gnd); return list.length ? `<h4 style="margin:4px 0 0">${h}</h4><div class="tchips">${list.map(chip).join("")}</div>` : ""; };
+      body = t ? `<div class="form">
+        <p class="muted" style="margin:0">Tap everyone who signed up for <b>${esc(t.name)}</b> after the deadline. Fill lines starts them after everyone else has had a first shift${ui.lateMode === "less" ? ", and gives them a couple fewer points over the day" : ""}. (Change that in Fill lines.)</p>
+        ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
+        <div class="row"><button class="btn primary" data-act="close">Done</button></div></div>` : '<p class="empty-note">That tournament is gone.</p>';
+    } else if (s.type === "pr-date") {
+      title = "Add a practice";
+      body = `<form class="form" id="prDateForm">
+        <label>Date<input class="line-in" id="prNewDate" type="date" value="${esc(todayISO())}" max="${esc(todayISO())}" required autofocus></label>
+        <div class="row"><button class="btn primary" type="submit">Add</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div></form>`;
     } else if (s.type === "tour-form") {
       const t = s.id ? tours().find(x => x.id === s.id) : null;
       title = t ? "Rename tournament" : "New tournament";
@@ -776,6 +933,8 @@
     if (!targets.length) { toast("Nothing to fill: every line is full or already played."); return; }
     const o = ui.owner || { rookies: [], apart: [], together: [] };
     const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id)), usualPairs = DBLines.usualPairs(S.players, S.points);
+    // Attendance nudge (lines.js tuning: +1 line sat for every practice vs none ≈ 1–2 points a day).
+    const priority = ui.useAtt ? attendancePriority(attendanceForGame(g)) : {}, late = lateOf(g);
     for (const i of targets) {
       const mb = DBLines.menBehind({ players: S.players, lines, idx: i, dayLines });
       const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
@@ -783,6 +942,7 @@
       const r = DBLines.planLine({
         players: S.players, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, pairing: ui.pairing, usualPairs,
         positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
+        priority, late, lateLess: ui.lateMode === "less" ? 0.5 : 0,
       });
       lines[i].lineup = r.lineup;
       r.notes.forEach(n => notes.push(`Line ${i + 1}: ${n}`));
@@ -1174,6 +1334,23 @@
     if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
     if (a === "fill-go") { const s = ui.sheet, ex = $("#fillExisting")?.checked; ui.sheet = null; renderSheet(); autoFill({ newLines: s.n, plays: s.plays, existing: ex }); return; }
     if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }
+    if (a === "fill-late") { ui.lateMode = el.dataset.v; store.set("lateMode", ui.lateMode); renderSheet(); return; }
+    if (a === "late-open") { const t = tourOf(game()); if (t) openSheet({ type: "late", tid: t.id }); return; }
+    if (a === "late-mark") { markLate(ui.sheet.tid, el.dataset.p); return; }
+    if (a === "pr-new") { newPractice(todayISO()); return; }
+    if (a === "pr-new-date") { openSheet({ type: "pr-date" }); return; }
+    if (a === "pr-open") { ui.practiceId = id; ui.prConfirm = null; render(); window.scrollTo(0, 0); return; }
+    if (a === "pr-close") { ui.practiceId = null; ui.prConfirm = null; render(); return; }
+    if (a === "pr-mark") { markPractice(ui.practiceId, el.dataset.p); return; }
+    if (a === "pr-delete") {
+      const pid = ui.practiceId; if (!pid) return;
+      if (ui.prConfirm !== pid) { ui.prConfirm = pid; render(); return; }
+      ui.prConfirm = null; ui.practiceId = null; ui.scrim = null;
+      save("app_delete_practice", { p_id: pid }, () => { S.practices = (S.practices || []).filter(x => x.id !== pid); });
+      toast("Practice deleted"); return;
+    }
+    if (a === "scrim-make") { const pr = (S.practices || []).find(x => x.id === ui.practiceId); if (pr) { ui.scrim = { pid: pr.id, ...scrimSplit((pr.attended || []).filter(id => P(id))) }; render(); } return; }
+    if (a === "scrim-clear") { ui.scrim = null; render(); return; }
     if (a === "auto-undo") { undoAuto(); return; }
     if (a === "auto-done") { ui.auto = null; render(); return; }
     if (a === "o-rookie") { const r = new Set(ui.owner.rookies); r.has(id) ? r.delete(id) : r.add(id); ui.owner.rookies = [...r]; saveOwner(); return; }
@@ -1262,6 +1439,13 @@
     const el = e.target;
     if (el.id === "gameSel") { ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
+    if (el.id === "fillAtt") { ui.useAtt = el.checked; store.set("useAtt", ui.useAtt); return; }
+    if (el.id === "prDate") {
+      const pr = (S.practices || []).find(x => x.id === ui.practiceId), v = el.value;
+      if (!pr || !v || v === pr.practice_date) { if (pr) el.value = pr.practice_date; return; }
+      save("app_save_practice", { x: { ...pr, practice_date: v } }, () => { pr.practice_date = v; });
+      return;
+    }
     if (a === "p-name") { const p = P(id), v = el.value.trim(); if (v && v !== p.name) savePlayer({ ...p, name: v }); else el.value = p.name; return; }
     if (a === "o-with") { const g = ui.owner[el.dataset.k][+el.dataset.i]; if (el.value && !g.with.includes(el.value)) { g.with.push(el.value); saveOwner(); } return; }
     if (a === "p-nick") { const p = P(id), v = el.value.trim(); if (v !== p.nick) savePlayer({ ...p, nick: v }); return; }
@@ -1308,6 +1492,10 @@
         openSheet({ type: "game-form", tour: t.id });
       }
       return;
+    }
+    if (f.id === "prDateForm") {
+      const v = $("#prNewDate").value; if (!v) return;
+      closeSheet(); ui.tab = "practice"; newPractice(v); return;
     }
     if (f.id === "codeForm") {
       const v = $("#newCode").value.trim(); if (v.length < 4) { toast("Use at least 4 characters"); return; }
