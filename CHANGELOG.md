@@ -7,6 +7,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 **Test board**
 - **Home tab.** The board now opens on Home instead of the last game played. It shows the next tournament (date, where, how many days away, late sign-ups), a button for today's practice check-in, every tournament split into coming up and played (with the record for played ones), and recent games. Tap a tournament to open its latest game, or to name its first game if it has none.
 - **Tournaments have a "Where"**, and you can add, edit or remove them from Home.
+- **The game picker only shows on Points and Stats**, where a game matters. Home, Practice and Roster don't show it.
+- **Removing a tournament asks what to do with its games:** delete them too, or keep them (they move to "Other games"). Works from Home (✎ → Remove) and from the game menu.
 - **November is on the schedule:** Susquehanna (Sun Nov 1), a tournament on Sun Nov 8 (place to be set), and Kutztown (Sat Nov 14).
 
 **Real board**

@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.15"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.16"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -250,7 +250,7 @@
     app.innerHTML = `
       <header class="top"><div class="top-in">
         <p class="brand">Deep Blue <span class="test-tag">TEST</span></p>
-        <div class="game-pick">
+        <div class="game-pick"${ui.tab === "points" || ui.tab === "stats" ? "" : " hidden"}>
           ${S.games.length ? `<select id="gameSel" aria-label="Game">${gameOpts}</select>` : `<span class="muted">No games yet</span>`}
           <button class="icon-btn" data-act="game-menu" aria-label="Game options">⋯</button>
         </div>
@@ -720,6 +720,24 @@
       </section>
       ${recent.length ? `<section class="card"><h3>Recent games</h3><ul class="pr-list">${recent.map(({ g, s }) => `<li><button data-act="home-game" data-id="${g.id}"><span>${esc(g.name)}${tourOf(g) ? ` <small class="muted">· ${esc(tourOf(g).name)}</small>` : ""}</span><span class="meta"><b class="${s.us > s.them ? "won" : s.them > s.us ? "lost" : ""}">${s.us}–${s.them}</b></span></button></li>`).join("")}</ul></section>` : ""}`;
   }
+  // Removing a tournament: delete its games too, or keep them (they move to "Other games").
+  function removeChoices(t, act, cls) {
+    const n = S.games.filter(g => g.tournament_id === t.id).length;
+    if (!n) return `<button class="${cls}danger" type="button" data-act="${act}" data-v="keep">Tap again to remove ${esc(t.name)}</button>`;
+    return `<button class="${cls}danger" type="button" data-act="${act}" data-v="all">Delete ${esc(t.name)} and its ${n} game${n === 1 ? "" : "s"}</button>
+      <button class="${cls}" type="button" data-act="${act}" data-v="keep">Remove ${esc(t.name)} but keep its games (they move to Other games)</button>`;
+  }
+  async function removeTour(tid, withGames) {
+    if (!tid) return;
+    if (withGames) {
+      for (const g of S.games.filter(x => x.tournament_id === tid)) {
+        await save("app_delete_game", { p_id: g.id }, () => { removeLocal("games", g.id); S.points = S.points.filter(x => x.game_id !== g.id); });
+      }
+      if (!game()) { ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null; store.set("game", ui.gameId); ui.swipe = null; }
+    }
+    await save("app_delete_tournament", { p_id: tid }, () => { S.tournaments = tours().filter(t => t.id !== tid); S.games.forEach(g => { if (g.tournament_id === tid) g.tournament_id = null; }); });
+    toast(withGames ? "Tournament and its games deleted" : "Tournament removed");
+  }
   // Open a tournament: its most recent game on the Points tab, or name its first game.
   function openTour(tid) {
     const gs = S.games.filter(g => g.tournament_id === tid);
@@ -893,7 +911,7 @@
         ${t ? "" : '<button data-act="copy-game">New game copying these lines</button>'}
         <button class="danger" data-act="delete-game">${s.confirm === "game" ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete game"}</button>` : ""}
         ${t ? `<button data-act="edit-tour">Edit ${esc(t.name)} (name, date, where)</button>
-        <button class="danger" data-act="delete-tour">${s.confirm === "tour" ? "Tap again: remove the tournament (its games are kept)" : "Remove tournament folder"}</button>` : ""}
+        ${s.confirm === "tour" ? removeChoices(t, "delete-tour", "") : '<button class="danger" data-act="delete-tour">Remove tournament</button>'}` : ""}
       </div>`;
     } else if (s.type === "game-form") {
       const g = s.id ? S.games.find(x => x.id === s.id) : null;
@@ -971,7 +989,8 @@
         <label>Where<input class="line-in" id="tWhere" value="${esc(t?.location || "")}" placeholder="e.g. Susquehanna" maxlength="80"></label>
         ${t || s.home ? "" : '<p class="muted" style="margin:0;font-size:14px">Next you\'ll name its first game.</p>'}
         <div class="row"><button class="btn primary" type="submit">${t ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button>
-          ${t ? `<button class="btn ghost danger" type="button" data-act="tour-del" style="margin-left:auto">${s.confirm ? "Tap again: remove it (games are kept)" : "Remove"}</button>` : ""}</div>
+          ${t && !s.confirm ? '<button class="btn ghost danger" type="button" data-act="tour-del" style="margin-left:auto">Remove</button>' : ""}</div>
+        ${t && s.confirm ? `<div class="remove-choices">${removeChoices(t, "tour-del", "btn ")}</div>` : ""}
       </form>`;
     }
     root.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title.replace(/<[^>]+>/g, "")}">
@@ -1355,10 +1374,8 @@
     if (a === "new-tour") { openSheet({ type: "tour-form" }); return; }
     if (a === "edit-tour") { openSheet({ type: "tour-form", id: game()?.tournament_id }); return; }
     if (a === "delete-tour") {
-      if (ui.sheet.confirm !== "tour") { ui.sheet.confirm = "tour"; renderSheet(); return; }
-      const tid = game()?.tournament_id; closeSheet();
-      save("app_delete_tournament", { p_id: tid }, () => { S.tournaments = tours().filter(t => t.id !== tid); S.games.forEach(g => { if (g.tournament_id === tid) g.tournament_id = null; }); });
-      return;
+      if (!el.dataset.v) { ui.sheet.confirm = "tour"; renderSheet(); return; }
+      const tid = game()?.tournament_id; closeSheet(); removeTour(tid, el.dataset.v === "all"); return;
     }
     if (a === "edit-game") { openSheet({ type: "game-form", id: ui.gameId }); return; }
     if (a === "copy-game") { openSheet({ type: "game-form", copyFrom: ui.gameId }); return; }
@@ -1408,10 +1425,8 @@
     if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }
     if (a === "fill-late") { ui.lateMode = el.dataset.v; store.set("lateMode", ui.lateMode); renderSheet(); return; }
     if (a === "tour-del") {
-      const tid = ui.sheet.id; if (!ui.sheet.confirm) { ui.sheet.confirm = true; renderSheet(); return; }
-      closeSheet();
-      save("app_delete_tournament", { p_id: tid }, () => { S.tournaments = tours().filter(t => t.id !== tid); S.games.forEach(g => { if (g.tournament_id === tid) g.tournament_id = null; }); });
-      return;
+      if (!el.dataset.v) { ui.sheet.confirm = true; renderSheet(); return; }
+      const tid = ui.sheet.id; closeSheet(); removeTour(tid, el.dataset.v === "all"); return;
     }
     if (a === "home-tour") { openTour(id); return; }
     if (a === "home-game") { openGame(id); return; }
