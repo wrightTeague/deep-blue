@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.16"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.17"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -249,7 +249,7 @@
     if (oldTrack && ui.swipe && ui.swipe.game === ui.gameId && swipeMode()) { const st = cardStep(oldTrack); if (st > 0) ui.swipe.i = clampLine(oldTrack, oldTrack.scrollLeft / st); }
     app.innerHTML = `
       <header class="top"><div class="top-in">
-        <p class="brand">Deep Blue <span class="test-tag">TEST</span></p>
+        <button class="brand" data-act="tab" data-tab="home" aria-label="Deep Blue, go to Home">Deep Blue <span class="test-tag">TEST</span></button>
         <div class="game-pick"${ui.tab === "points" || ui.tab === "stats" ? "" : " hidden"}>
           ${S.games.length ? `<select id="gameSel" aria-label="Game">${gameOpts}</select>` : `<span class="muted">No games yet</span>`}
           <button class="icon-btn" data-act="game-menu" aria-label="Game options">⋯</button>

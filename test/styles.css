@@ -389,3 +389,4 @@ b.won{color:#2f9a57} b.lost{color:var(--red)}
 .remove-choices{display:flex;flex-direction:column;gap:8px;align-items:stretch;border-top:1px dashed var(--line);padding-top:10px}
 .remove-choices .btn{text-align:left;white-space:normal;height:auto;min-height:40px;padding:8px 12px}
 .game-pick[hidden]{display:none}
+button.brand{border:0;background:transparent;padding:0;cursor:pointer;text-align:left}
