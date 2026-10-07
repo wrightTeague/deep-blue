@@ -366,3 +366,27 @@ body:has(.clipbar) .toast{bottom:calc(var(--nav-h) + 86px + env(safe-area-inset-
 .att-mini{color:var(--blue)} .late-mini{color:#c25a00;font-weight:700}
 .pick-list .meta{white-space:normal;text-align:right;line-height:1.25}
 .pick-list .meta .att-mini,.pick-list .meta .late-mini,.pick-list .meta .rest{white-space:nowrap}
+
+/* ---------- home ---------- */
+.home-next{border-top:4px solid var(--blue)}
+.home-next .eyebrow{margin:0}
+#main > .card.home-next h3{font-size:28px;line-height:1.1}
+.next-meta{margin:0;font-size:17px}
+.sched-h{margin:8px 0 0 !important;font-family:var(--hand);font-size:14px !important;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sched{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.sched li{display:flex;align-items:center;gap:4px;border-bottom:1px dashed var(--line)}
+.sched li.is-next .sched-name{color:var(--blue);font-weight:700}
+.sched-open{flex:1;min-width:0;display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:10px;align-items:center;border:0;background:transparent;padding:9px 6px;border-radius:8px;text-align:left;min-height:48px;font-size:17px}
+.sched-open:hover{background:#f1f3f6}
+.sched-date{font-variant-numeric:tabular-nums;color:var(--muted);font-size:15px}
+.sched-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sched-name small{display:block;font-size:13px;color:var(--muted);font-weight:400}
+.sched-status{font-size:15px;white-space:nowrap;text-align:right}
+.sched-status .soon{color:var(--blue)}
+.sched li.past .sched-name{color:var(--ink)}
+b.won{color:#2f9a57} b.lost{color:var(--red)}
+.bottom-nav button{min-width:0;padding:0 2px}
+.remove-choices{display:flex;flex-direction:column;gap:8px;align-items:stretch;border-top:1px dashed var(--line);padding-top:10px}
+.remove-choices .btn{text-align:left;white-space:normal;height:auto;min-height:40px;padding:8px 12px}
+.game-pick[hidden]{display:none}
+button.brand{border:0;background:transparent;padding:0;cursor:pointer;text-align:left}
