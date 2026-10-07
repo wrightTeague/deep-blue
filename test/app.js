@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.17"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.18"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -801,8 +801,8 @@
     return `
       <h2 class="sec">Roster</h2>
       <form class="add-form" id="addForm">
-        <input class="line-in" id="addName" placeholder="Add a player (full name)" maxlength="60" style="flex:1;min-width:180px">
-        <input class="line-in" id="addNick" placeholder="Nickname" maxlength="30" style="width:110px">
+        <input class="line-in" id="addName" value="${esc(ui.addName || "")}" placeholder="Add a player (full name)" maxlength="60" style="flex:1;min-width:180px">
+        <input class="line-in" id="addNick" value="${esc(ui.addNick || "")}" placeholder="Nickname" maxlength="30" style="width:110px">
         <div class="seg" role="group" aria-label="Matchup"><button type="button" data-act="add-g" data-v="W" aria-pressed="${ui.addG === "W"}">W</button><button type="button" data-act="add-g" data-v="M" aria-pressed="${ui.addG !== "W"}">M</button></div>
         <button class="btn primary sm" type="submit">Add</button>
       </form>
@@ -1553,6 +1553,9 @@
   document.addEventListener("input", e => {
     if (e.target.id === "pickQ") { ui.sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const q = $("#pickQ"); q.focus(); try { q.setSelectionRange(pos, pos); } catch (er) {} }
     if (e.target.id === "rosterFilter") { ui.rosterFilter = e.target.value; render(); }
+    // Keep a half-typed new player across redraws (tapping W/M, or a change from another phone).
+    if (e.target.id === "addName") ui.addName = e.target.value;
+    if (e.target.id === "addNick") ui.addNick = e.target.value;
   });
 
   // iPhones ignore the "no zoom" setting for pinches, so stop the pinch gesture itself.
@@ -1570,6 +1573,7 @@
       const name = $("#addName").value.trim().replace(/\s+/g, " "); if (!name) return;
       if (S.players.some(p => p.name.toLowerCase() === name.toLowerCase())) { toast(name + " is already on the roster"); return; }
       const nick = $("#addNick").value.trim() || name.split(" ")[0];
+      ui.addName = ""; ui.addNick = "";
       savePlayer({ id: uid(), name, nick, gender: ui.addG === "W" ? "W" : "M", active: true, created_at: new Date().toISOString() });
       toast("Added " + name); setTimeout(() => $("#addName")?.focus(), 0);
       return;

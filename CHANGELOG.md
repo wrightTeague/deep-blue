@@ -10,6 +10,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 **Test board**
 - **Tap "Deep Blue" at the top to go to Home** from anywhere.
+- **Fixed: tapping W or M when adding a player no longer clears the name** you'd typed. A live update from another phone won't clear it either.
 
 ## Oct 7, 2026
 
