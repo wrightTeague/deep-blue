@@ -1,4 +1,4 @@
-/* Deep Blue line maker (test board only).
+/* Deep Blue line maker.
    Pure functions, no DOM: given the roster, the game's lines so far and the previous game's
    lines, pick the players for one line. Loaded in the browser as window.DBLines and in Node
    (for testing) through module.exports. */
@@ -52,7 +52,13 @@
      ratio { W, M } (default 3 W / 4 M), leaders per line (default 2),
      positions ({ handlers, deep, short }, each { main: Set, ok: Set } for "can play it if
      needed"), deep (older single Set of deep deeps, used when positions has none), rookies (Set), apart and together (lists of { p, with: [ids] } or [id, id]),
-     seed (string), dayLines (earlier games today, for rotating leader partners).
+     seed (string), dayLines (earlier games today, for rotating leader partners),
+     priority ({ id: number }: a nudge in "lines sat". Positive = goes out sooner (good practice
+     attendance), negative = later (late tournament sign-up). Never-played-yet players are
+     ordered by it first, so it decides who starts.) priorityMode "played" puts the nudge
+     after lines sat instead (only breaks ties), "lines" (default) adds it to lines sat.
+     late (Set of late sign-ups: their first shift comes after everyone else's), lateLess
+     (number of lines to take off late sign-ups all day; 0 = they just start later).
      Returns { lineup: [{p, r}], notes: [string] }. */
   function planLine(o) {
     const ratio = o.ratio || { W: 3, M: 4 };
@@ -78,7 +84,14 @@
     // Who should go out next: most lines sat (never on yet = first), then fewest lines played,
     // then most points sat.
     const big = v => (v === null ? 1e9 : v);
-    const key = p => { const i = rest.info(p.id); return [big(i.lines), -i.played, big(i.pts), tie.get(p.id) || 0]; };
+    // Nudges (see opts): attendance moves people up, a late sign-up starts after everyone
+    // else's first shift, and with lateLess also carries a small penalty all day.
+    const late = o.late || new Set();
+    const pri = id => ((o.priority && +o.priority[id]) || 0) - (late.has(id) ? +o.lateLess || 0 : 0);
+    const firstShift = id => (late.has(id) ? 5e8 : 1e9);
+    const key = p => { const i = rest.info(p.id), b = pri(p.id), fresh = i.lines === null;
+      return o.priorityMode === "played" ? [fresh ? firstShift(p.id) + b : i.lines, -i.played + b, big(i.pts), tie.get(p.id) || 0]
+        : [fresh ? firstShift(p.id) + b : i.lines + b, -i.played, big(i.pts), tie.get(p.id) || 0]; };
     const order = list => list.slice().sort((a, b) => { const x = key(a), y = key(b); for (let k = 0; k < x.length; k++) if (x[k] !== y[k]) return y[k] - x[k]; return 0; });
     const tired = p => rest.info(p.id).lines === 0 || nextOn.has(p.id);   // back to back either side
 

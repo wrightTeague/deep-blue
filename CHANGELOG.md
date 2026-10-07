@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 7, 2026
+
+**Real board**
+- **Everything from the Oct 6 test board is on the real board:** the Practice tab (check-in, attendance since the last tournament, scrim teams), late sign-ups for a tournament, attendance and late sign-up options in Fill lines, and practices in the player picker.
+
 ## Oct 6, 2026
 
 **Test board**
