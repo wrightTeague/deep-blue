@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 7, 2026 (evening)
+
+**Real board and test board**
+- **"Left early / not scrimming" at practice.** On a practice, switch the tap mode to "Left early / not scrimming" and tap anyone who's sitting out. They stay checked in (it still counts toward attendance) but are left off the scrim teams, and drop off teams already made. Tap again to put them back.
+
 ## Oct 7, 2026 (later)
 
 **Real board**

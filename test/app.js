@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.18"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.19"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -581,9 +581,11 @@
     const teams = { A: [], B: [] }; ps.forEach(({ p }) => scrimPlace(teams, p));
     return teams;
   }
+  // Checked in and not marked "left early / not scrimming".
+  const scrimmers = pr => { const out = new Set(pr.sitting || []); return (pr.attended || []).filter(id => P(id) && !out.has(id)); };
   function scrimSync(pr) {
     const s = ui.scrim; if (!s || s.pid !== pr.id) return null;
-    const here = new Set((pr.attended || []).filter(id => P(id)));
+    const here = new Set(scrimmers(pr));
     s.A = s.A.filter(id => here.has(id)); s.B = s.B.filter(id => here.has(id));
     here.forEach(id => { if (!s.A.includes(id) && !s.B.includes(id)) scrimPlace(s, P(id)); });
     return s;
@@ -597,9 +599,10 @@
     const people = sortPlayers(activePlayers());
     let open = "";
     if (pr) {
-      const here = new Set((pr.attended || []).filter(id => P(id)));
+      const here = new Set((pr.attended || []).filter(id => P(id))), sitting = new Set((pr.sitting || []).filter(id => here.has(id)));
       const hp = people.filter(p => here.has(p.id)), w = hp.filter(p => p.gender === "W").length, m = hp.filter(p => p.gender === "M").length;
-      const chip = p => `<button class="tchip chk ${p.gender || "U"}" data-act="pr-mark" data-p="${p.id}" aria-pressed="${here.has(p.id)}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}</button>`;
+      const sitMode = ui.prMode === "sit";
+      const chip = p => `<button class="tchip chk ${p.gender || "U"}${sitting.has(p.id) ? " sitting" : ""}" data-act="pr-mark" data-p="${p.id}" aria-pressed="${here.has(p.id)}"${sitMode && !here.has(p.id) ? " disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span>${esc(label(p))}${badge(p)}${sitting.has(p.id) ? '<span class="sit-tag">out</span>' : ""}</button>`;
       const grp = (gnd, t) => { const list = people.filter(p => (p.gender || "") === gnd); return list.length ? `<h4>${t}</h4><div class="tchips">${list.map(chip).join("")}</div>` : ""; };
       // Anyone checked in who's since been marked Out or removed still counts; show them too.
       const extra = (pr.attended || []).filter(id => P(id) && !P(id).active).map(P);
@@ -611,14 +614,15 @@
           <h3>${pr.practice_date === today ? "Today's practice" : "Practice"}</h3>
           <button class="btn sm primary" data-act="pr-close">Done</button>
         </div>
-        <div class="row" style="gap:10px"><input class="line-in" id="prDate" type="date" value="${esc(pr.practice_date)}" aria-label="Practice date"><span class="here-count"><b>${here.size} here</b> · ${w} W · ${m} M</span></div>
-        <p class="muted" style="margin:0;font-size:14px">Tap everyone who's here. It saves as you go, and anyone else on the board sees it live.</p>
+        <div class="row" style="gap:10px"><input class="line-in" id="prDate" type="date" value="${esc(pr.practice_date)}" aria-label="Practice date"><span class="here-count"><b>${here.size} here</b> · ${w} W · ${m} M${sitting.size ? ` · <span class="sit-count">${sitting.size} not scrimming</span>` : ""}</span></div>
+        <div class="seg pr-mode" role="group" aria-label="What a tap does"><button data-act="pr-mode" data-v="here" aria-pressed="${!sitMode}">Check in</button><button data-act="pr-mode" data-v="sit" aria-pressed="${sitMode}">Left early / not scrimming</button></div>
+        <p class="muted" style="margin:0;font-size:14px">${sitMode ? "Tap anyone who left early or isn't scrimming. They stay checked in (it still counts as a practice) but are left off the scrim teams. Tap again to put them back." : "Tap everyone who's here. It saves as you go, and anyone else on the board sees it live."}</p>
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         ${extra.length ? `<h4>Marked out, but checked in</h4><div class="tchips">${extra.map(chip).join("")}</div>` : ""}
         <div class="scrim-box">
           <div class="row" style="justify-content:space-between;gap:8px"><h4 style="margin:0">Scrim teams</h4>
-            <span class="row" style="gap:6px">${sc ? '<button class="btn sm" data-act="scrim-make">Shuffle</button><button class="btn sm ghost" data-act="scrim-clear">Hide</button>' : `<button class="btn sm" data-act="scrim-make" ${here.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}</span></div>
-          ${sc ? `<div class="scrim-teams">${team("A", "Dark")}${team("B", "Light")}</div><p class="muted" style="margin:0;font-size:13px">Even women and men, captains split, handlers spread out. People who check in later join the smaller side. Only on this phone.</p>` : `<p class="muted" style="margin:0;font-size:14px">Even women and men on each side, captains split up.</p>`}
+            <span class="row" style="gap:6px">${sc ? '<button class="btn sm" data-act="scrim-make">Shuffle</button><button class="btn sm ghost" data-act="scrim-clear">Hide</button>' : `<button class="btn sm" data-act="scrim-make" ${here.size - sitting.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}</span></div>
+          ${sc ? `<div class="scrim-teams">${team("A", "Dark")}${team("B", "Light")}</div><p class="muted" style="margin:0;font-size:13px">Even women and men, captains split, handlers spread out. People who check in later join the smaller side; anyone marked not scrimming drops off. Only on this phone.</p>` : `<p class="muted" style="margin:0;font-size:14px">Even women and men on each side, captains split up.</p>`}
         </div>
         <div class="row" style="justify-content:flex-end"><button class="btn sm danger ghost" data-act="pr-delete">${ui.prConfirm === pr.id ? "Tap again to delete this practice" : "Delete practice"}</button></div>
       </section>`;
@@ -651,8 +655,16 @@
     const on = !(pr.attended || []).includes(player);
     markWaiting.set(pid, (markWaiting.get(pid) || 0) + 1);
     const v = await save("app_practice_mark", { p_id: pid, p_player: player, p_on: on }, () => { pr.attended = on ? [...(pr.attended || []), player] : (pr.attended || []).filter(id => id !== player); });
+    if (!on && (pr.sitting || []).includes(player)) markSitting(pid, player);   // not here at all now
     const left = markWaiting.get(pid) - 1; markWaiting.set(pid, left);
     if (!left && Array.isArray(v)) { const cur = (S.practices || []).find(x => x.id === pid); if (cur) { cur.attended = v; render(); } }
+  }
+  async function markSitting(pid, player) {
+    const pr = (S.practices || []).find(x => x.id === pid); if (!pr) return;
+    const cur = pr.sitting || [], on = !cur.includes(player);
+    if (on && !(pr.attended || []).includes(player)) return;   // only people who are here can sit out
+    const v = await save("app_practice_sit_mark", { p_id: pid, p_player: player, p_on: on }, () => { pr.sitting = on ? [...cur, player] : cur.filter(id => id !== player); });
+    if (Array.isArray(v)) { const x = (S.practices || []).find(y => y.id === pid); if (x) { x.sitting = v; render(); } }
   }
   async function markLate(tid, player) {
     const t = tours().find(x => x.id === tid); if (!t) return;
@@ -1438,9 +1450,10 @@
     if (a === "late-mark") { markLate(ui.sheet.tid, el.dataset.p); return; }
     if (a === "pr-new") { newPractice(todayISO()); return; }
     if (a === "pr-new-date") { openSheet({ type: "pr-date" }); return; }
-    if (a === "pr-open") { ui.practiceId = id; ui.prConfirm = null; render(); window.scrollTo(0, 0); return; }
-    if (a === "pr-close") { ui.practiceId = null; ui.prConfirm = null; render(); return; }
-    if (a === "pr-mark") { markPractice(ui.practiceId, el.dataset.p); return; }
+    if (a === "pr-open") { ui.practiceId = id; ui.prConfirm = null; ui.prMode = "here"; render(); window.scrollTo(0, 0); return; }
+    if (a === "pr-close") { ui.practiceId = null; ui.prConfirm = null; ui.prMode = "here"; render(); return; }
+    if (a === "pr-mode") { ui.prMode = el.dataset.v; render(); return; }
+    if (a === "pr-mark") { if (ui.prMode === "sit") markSitting(ui.practiceId, el.dataset.p); else markPractice(ui.practiceId, el.dataset.p); return; }
     if (a === "pr-delete") {
       const pid = ui.practiceId; if (!pid) return;
       if (ui.prConfirm !== pid) { ui.prConfirm = pid; render(); return; }
@@ -1448,7 +1461,7 @@
       save("app_delete_practice", { p_id: pid }, () => { S.practices = (S.practices || []).filter(x => x.id !== pid); });
       toast("Practice deleted"); return;
     }
-    if (a === "scrim-make") { const pr = (S.practices || []).find(x => x.id === ui.practiceId); if (pr) { ui.scrim = { pid: pr.id, ...scrimSplit((pr.attended || []).filter(id => P(id))) }; render(); } return; }
+    if (a === "scrim-make") { const pr = (S.practices || []).find(x => x.id === ui.practiceId); if (pr) { ui.scrim = { pid: pr.id, ...scrimSplit(scrimmers(pr)) }; render(); } return; }
     if (a === "scrim-clear") { ui.scrim = null; render(); return; }
     if (a === "auto-undo") { undoAuto(); return; }
     if (a === "auto-done") { ui.auto = null; render(); return; }
