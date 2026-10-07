@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 7, 2026 (later)
 
 **Real board**
+- **Fixed: tapping W or M when adding a player no longer clears the name** you'd typed.
 - **Everything from today's test board is on the real board:** the Home tab (next tournament, practice check-in button, every tournament with its record, recent games), a "Where" for tournaments, removing a tournament with or without its games, the game picker only on Points and Stats, and tapping "Deep Blue" to go Home.
 - **November is on the schedule:** Susquehanna (Sun Nov 1), a tournament on Sun Nov 8 (place to be set), and Kutztown (Sat Nov 14).
 
