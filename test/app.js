@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.14"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.15"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -38,7 +38,7 @@
   let CODE = store.get("code", "");
   let OWNER = store.get("owner", "");  // private settings code, only on this device
   let S = { team: null, tournaments: [], players: [], games: [], points: [], practices: [] };
-  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "points"))), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
+  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "home"))), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
@@ -231,7 +231,7 @@
   const restFor = (g, lines, idx) => { const pg = prevGameOf(g); return restBefore(lines, idx, pg ? gamePoints(pg.id) : null); };
 
   // ---------- render: shell ----------
-  const TABS = [["points", "Points"], ["practice", "Practice"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
+  const TABS = [["home", "Home"], ["points", "Points"], ["practice", "Practice"], ["stats", "Stats"], ["roster", "Roster"]];   // zone spots live on Roster now
 
   function render() {
     if (!S.team) return;
@@ -258,7 +258,7 @@
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
         <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
       </div></header>
-      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : renderPoints()}</main>
+      <main id="main">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : ui.tab === "home" ? renderHome() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     renderSheet();
@@ -661,6 +661,76 @@
     if (Array.isArray(v)) { t.late = v; renderSheet(); }
   }
 
+  // ---------- home: what's next, the season's tournaments, recent games ----------
+  const daysUntil = d => { const [y, m, day] = String(d).split("-").map(Number); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((new Date(y, m - 1, day) - t) / 86400000); };
+  const fmtDay = d => { const [y, m, day] = String(d).split("-").map(Number); return y ? new Date(y, m - 1, day).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : ""; };
+  const whenText = d => { const n = daysUntil(d); return n === 0 ? "today" : n === 1 ? "tomorrow" : n > 1 ? `in ${n} days` : n === -1 ? "yesterday" : `${-n} days ago`; };
+  // Wins and losses from games with at least one result.
+  function tourRecord(t) {
+    let w = 0, l = 0, tie = 0, us = 0, them = 0;
+    S.games.filter(g => g.tournament_id === t.id).forEach(g => { const s = computeStats(gamePoints(g.id)).team; if (!s.played) return; us += s.us; them += s.them; if (s.us > s.them) w++; else if (s.them > s.us) l++; else tie++; });
+    return { w, l, tie, us, them, any: w + l + tie > 0 };
+  }
+  function renderHome() {
+    const today = todayISO();
+    const dated = tours().filter(t => t.start_date).sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+    const next = dated.find(t => t.start_date >= today) || null;
+    const todays = practices().find(x => x.practice_date === today);
+    const att = attendanceFor(today, null);
+    let nextCard = "";
+    if (next) {
+      const late = (Array.isArray(next.late) ? next.late : []).filter(id => P(id)).length, games = S.games.filter(g => g.tournament_id === next.id).length;
+      nextCard = `<section class="card home-next">
+        <p class="eyebrow">Next up · ${whenText(next.start_date)}</p>
+        <h3>${esc(next.name)}</h3>
+        <p class="next-meta">${fmtDay(next.start_date)}${next.location ? ` · at ${esc(next.location)}` : ""}</p>
+        <div class="row" style="gap:8px">
+          <button class="btn primary sm" data-act="home-tour" data-id="${next.id}">${games ? "Open its games" : "Plan the first game"}</button>
+          <button class="btn sm" data-act="home-late" data-id="${next.id}">Late sign-ups${late ? " (" + late + ")" : ""}</button>
+          <button class="btn sm ghost" data-act="home-edit-tour" data-id="${next.id}">Edit</button>
+        </div>
+        <p class="muted" style="margin:0;font-size:14px">${att.n ? `${att.n} practice${att.n === 1 ? "" : "s"} ${sinceText(att)} ${att.n === 1 ? "counts" : "count"} toward who starts.` : `No practices checked in ${sinceText(att)} yet.`}</p>
+      </section>`;
+    }
+    const row = t => {
+      const past = t.start_date && t.start_date < today, r = tourRecord(t), n = S.games.filter(g => g.tournament_id === t.id).length;
+      const status = r.any ? `<b>${r.w}–${r.l}</b> <span class="muted">(${r.us}–${r.them})</span>` : t.start_date ? (past ? `<span class="muted">${n ? n + " game" + (n === 1 ? "" : "s") : "no games"}</span>` : `<span class="soon">${whenText(t.start_date)}</span>`) : `<span class="muted">no date</span>`;
+      return `<li class="${past ? "past" : ""}${next && t.id === next.id ? " is-next" : ""}"><button class="sched-open" data-act="home-tour" data-id="${t.id}">
+          <span class="sched-date">${t.start_date ? fmtDate(t.start_date) : "—"}</span>
+          <span class="sched-name">${esc(t.name)}${t.location ? `<small>at ${esc(t.location)}</small>` : ""}</span>
+          <span class="sched-status">${status}</span></button>
+        <button class="icon-btn" data-act="home-edit-tour" data-id="${t.id}" aria-label="Edit ${esc(t.name)}">✎</button></li>`;
+    };
+    const upcoming = dated.filter(t => t.start_date >= today), past = dated.filter(t => t.start_date < today).reverse(), undated = tours().filter(t => !t.start_date);
+    const recent = S.games.map(g => ({ g, s: computeStats(gamePoints(g.id)).team })).filter(x => x.s.played).slice(-5).reverse();
+    return `<h2 class="sec">Home</h2>
+      ${nextCard}
+      <section class="card home-practice">
+        <div class="row" style="justify-content:space-between;gap:8px">
+          <h3>Practice</h3>
+          <button class="btn sm ${todays ? "" : "primary"}" data-act="home-practice">${todays ? `Today: ${(todays.attended || []).filter(id => P(id)).length} here` : "Check in today's practice"}</button>
+        </div>
+      </section>
+      <section class="card">
+        <div class="row" style="justify-content:space-between;gap:8px"><h3>Tournaments</h3><button class="btn sm" data-act="home-new-tour">+ Add tournament</button></div>
+        ${upcoming.length ? `<h4 class="sched-h">Coming up</h4><ul class="sched">${upcoming.map(row).join("")}</ul>` : ""}
+        ${past.length ? `<h4 class="sched-h">Played</h4><ul class="sched">${past.map(row).join("")}</ul>` : ""}
+        ${undated.length ? `<h4 class="sched-h">No date yet</h4><ul class="sched">${undated.map(row).join("")}</ul>` : ""}
+        ${tours().length ? "" : '<p class="empty-note">No tournaments yet.</p>'}
+      </section>
+      ${recent.length ? `<section class="card"><h3>Recent games</h3><ul class="pr-list">${recent.map(({ g, s }) => `<li><button data-act="home-game" data-id="${g.id}"><span>${esc(g.name)}${tourOf(g) ? ` <small class="muted">· ${esc(tourOf(g).name)}</small>` : ""}</span><span class="meta"><b class="${s.us > s.them ? "won" : s.them > s.us ? "lost" : ""}">${s.us}–${s.them}</b></span></button></li>`).join("")}</ul></section>` : ""}`;
+  }
+  // Open a tournament: its most recent game on the Points tab, or name its first game.
+  function openTour(tid) {
+    const gs = S.games.filter(g => g.tournament_id === tid);
+    if (!gs.length) { openSheet({ type: "game-form", tour: tid }); return; }
+    openGame(gs[gs.length - 1].id);
+  }
+  function openGame(gid) {
+    ui.gameId = gid; store.set("game", gid); ui.swipe = null; ui.editLines = null; ui.undoDel = null;
+    ui.tab = "points"; store.set("tab", "points"); render(); window.scrollTo(0, 0);
+  }
+
   // ---------- render: stats ----------
   function renderStats() {
     const scope = ui.stats.scope;
@@ -822,7 +892,7 @@
         ${g ? `<button data-act="edit-game">Edit game (name, date, tournament)</button>
         ${t ? "" : '<button data-act="copy-game">New game copying these lines</button>'}
         <button class="danger" data-act="delete-game">${s.confirm === "game" ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete game"}</button>` : ""}
-        ${t ? `<button data-act="edit-tour">Rename ${esc(t.name)}</button>
+        ${t ? `<button data-act="edit-tour">Edit ${esc(t.name)} (name, date, where)</button>
         <button class="danger" data-act="delete-tour">${s.confirm === "tour" ? "Tap again: remove the tournament (its games are kept)" : "Remove tournament folder"}</button>` : ""}
       </div>`;
     } else if (s.type === "game-form") {
@@ -894,12 +964,14 @@
         <div class="row"><button class="btn primary" type="submit">Add</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div></form>`;
     } else if (s.type === "tour-form") {
       const t = s.id ? tours().find(x => x.id === s.id) : null;
-      title = t ? "Rename tournament" : "New tournament";
+      title = t ? "Edit tournament" : "New tournament";
       body = `<form class="form" id="tourForm">
         <label>Name<input class="line-in" id="tName" value="${esc(t ? t.name : "")}" placeholder="e.g. Haverford Hat" maxlength="80" autofocus required></label>
         <label>Date<input class="line-in" id="tDate" type="date" value="${esc(t?.start_date || "")}"></label>
-        ${t ? "" : '<p class="muted" style="margin:0;font-size:14px">Next you\'ll name its first game.</p>'}
-        <div class="row"><button class="btn primary" type="submit">${t ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button></div>
+        <label>Where<input class="line-in" id="tWhere" value="${esc(t?.location || "")}" placeholder="e.g. Susquehanna" maxlength="80"></label>
+        ${t || s.home ? "" : '<p class="muted" style="margin:0;font-size:14px">Next you\'ll name its first game.</p>'}
+        <div class="row"><button class="btn primary" type="submit">${t ? "Save" : "Create"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button>
+          ${t ? `<button class="btn ghost danger" type="button" data-act="tour-del" style="margin-left:auto">${s.confirm ? "Tap again: remove it (games are kept)" : "Remove"}</button>` : ""}</div>
       </form>`;
     }
     root.innerHTML = `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title.replace(/<[^>]+>/g, "")}">
@@ -1335,6 +1407,18 @@
     if (a === "fill-go") { const s = ui.sheet, ex = $("#fillExisting")?.checked; ui.sheet = null; renderSheet(); autoFill({ newLines: s.n, plays: s.plays, existing: ex }); return; }
     if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }
     if (a === "fill-late") { ui.lateMode = el.dataset.v; store.set("lateMode", ui.lateMode); renderSheet(); return; }
+    if (a === "tour-del") {
+      const tid = ui.sheet.id; if (!ui.sheet.confirm) { ui.sheet.confirm = true; renderSheet(); return; }
+      closeSheet();
+      save("app_delete_tournament", { p_id: tid }, () => { S.tournaments = tours().filter(t => t.id !== tid); S.games.forEach(g => { if (g.tournament_id === tid) g.tournament_id = null; }); });
+      return;
+    }
+    if (a === "home-tour") { openTour(id); return; }
+    if (a === "home-game") { openGame(id); return; }
+    if (a === "home-late") { openSheet({ type: "late", tid: id }); return; }
+    if (a === "home-edit-tour") { openSheet({ type: "tour-form", id }); return; }
+    if (a === "home-new-tour") { openSheet({ type: "tour-form", home: true }); return; }
+    if (a === "home-practice") { ui.tab = "practice"; store.set("tab", "practice"); newPractice(todayISO()); window.scrollTo(0, 0); return; }
     if (a === "late-open") { const t = tourOf(game()); if (t) openSheet({ type: "late", tid: t.id }); return; }
     if (a === "late-mark") { markLate(ui.sheet.tid, el.dataset.p); return; }
     if (a === "pr-new") { newPractice(todayISO()); return; }
@@ -1483,13 +1567,13 @@
       return;
     }
     if (f.id === "tourForm") {
-      const name = $("#tName").value.trim(), date = $("#tDate").value; if (!name) return;
+      const name = $("#tName").value.trim(), date = $("#tDate").value, location = ($("#tWhere")?.value || "").trim(); if (!name) return;
       const s = ui.sheet;
-      if (s.id) { const t = tours().find(x => x.id === s.id); closeSheet(); save("app_save_tournament", { x: { ...t, name, start_date: date || null } }, () => Object.assign(t, { name, start_date: date || null })); }
+      if (s.id) { const t = tours().find(x => x.id === s.id); closeSheet(); save("app_save_tournament", { x: { ...t, name, start_date: date || null, location } }, () => Object.assign(t, { name, start_date: date || null, location })); }
       else {
-        const t = { id: uid(), name, start_date: date || null };
+        const t = { id: uid(), name, start_date: date || null, location, late: [] };
         save("app_save_tournament", { x: t }, () => { S.tournaments = [...tours(), t]; });
-        openSheet({ type: "game-form", tour: t.id });
+        if (s.home) closeSheet(); else openSheet({ type: "game-form", tour: t.id });
       }
       return;
     }
