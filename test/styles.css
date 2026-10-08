@@ -396,3 +396,18 @@ button.brand{border:0;background:transparent;padding:0;cursor:pointer;text-align
 .tchip.chk:disabled{opacity:.4}
 .sit-tag{font-size:12px;font-weight:700;color:#c25a00;text-transform:uppercase;letter-spacing:.04em;margin-left:2px}
 .sit-count{color:#c25a00}
+
+/* ---------- pods ---------- */
+.pod .pod-name{font-family:var(--hand);font-weight:700;font-size:22px;color:var(--blue);border-bottom-style:dashed;max-width:100%}
+.pod-count{margin:0;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pod-tag{font-family:var(--hand);font-weight:700;font-size:13px;padding:0 8px;border-radius:999px;background:rgba(29,77,176,.1);color:var(--blue)}
+.pod-pick{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pod-pick button{width:100%;text-align:left;border:1.5px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.pod-pick button[aria-pressed="true"]{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue);background:rgba(29,77,176,.06)}
+.pp-name{font-family:var(--hand);font-weight:700;font-size:18px;color:var(--blue)}
+.pp-who{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:15px}
+.pp-who .W{color:var(--w-ink)} .pp-who .M{color:var(--m)}
+.pp-meta{font-size:13px;color:var(--muted)}
+.pp-meta .b2b{color:#c25a00;font-weight:700}
+.pod-total{margin:0;font-size:16px;font-variant-numeric:tabular-nums}
+.pod-total.over{color:var(--red)}

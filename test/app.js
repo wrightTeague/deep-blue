@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.19"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.20"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -462,7 +462,7 @@
       </div>
       <ul class="slots">${slots.join("")}</ul>
       <div class="point-foot">
-        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span>${missing.map(t => `<span class="nopos">${t}</span>`).join("")}</span>
+        <span class="counts"><span>${line.length}/${SLOTS}</span><span class="cw">${w} W</span><span class="cm">${m} M</span>${(() => { const pl = podsOnLine(line.map(s => s.p)); return pl.length ? `<span class="pod-tag">${pl.map(x => esc(x.name)).join(" + ")}</span>` : ""; })()}${missing.map(t => `<span class="nopos">${t}</span>`).join("")}</span>
         ${rows}
       </div>
     </article>`;
@@ -761,6 +761,40 @@
     ui.tab = "points"; store.set("tab", "points"); render(); window.scrollTo(0, 0);
   }
 
+  // ---------- pods: groups of players sent out together ----------
+  // Stored on the team as [{ id, name, ids: [player ids] }].
+  const podsOf = () => (S.team && Array.isArray(S.team.pods) ? S.team.pods : []);
+  function savePods(fn) {
+    const next = JSON.parse(JSON.stringify(podsOf())); fn(next);
+    save("app_save_team_pods", { p: next }, () => { S.team.pods = next; });
+  }
+  const podCounts = ids => { const ps = ids.map(P).filter(Boolean), hz = new Set([...(zoneOf().handlers || []), ...(zoneOf().handlers_ok || [])]);
+    return { n: ps.length, w: ps.filter(p => p.gender === "W").length, m: ps.filter(p => p.gender === "M").length, h: ps.filter(p => hz.has(p.id)).length, c: ps.filter(p => p.badge).length }; };
+  const countText = c => `${c.n} · ${c.w} W · ${c.m} M${c.h ? ` · ${c.h} handler${c.h === 1 ? "" : "s"}` : ""}${c.c ? ` · ${c.c} capt` : ""}`;
+  const nextPodName = () => { const used = new Set(podsOf().map(x => x.name)); for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") if (!used.has("Pod " + ch)) return "Pod " + ch; return "Pod " + (podsOf().length + 1); };
+  // Pods whose whole group is on a line.
+  const podsOnLine = ids => { const on = new Set(ids); return podsOf().filter(x => x.ids.length && x.ids.every(id => on.has(id))); };
+  function renderPods() {
+    const inPods = new Map(); podsOf().forEach(x => x.ids.forEach(id => inPods.set(id, (inPods.get(id) || 0) + 1)));
+    const cards = podsOf().map(x => {
+      const c = podCounts(x.ids);
+      const chips = x.ids.map((id, i) => { const p = P(id); return p ? `<div class="chip"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><button class="icon-btn" data-act="pod-remove" data-id="${x.id}" data-i="${i}" aria-label="Take ${esc(label(p))} out of ${esc(x.name)}">×</button></div>` : ""; }).join("");
+      return `<section class="zone-col pod">
+        <input class="line-in pod-name" id="podname-${x.id}" data-act="pod-name" data-id="${x.id}" value="${esc(x.name)}" maxlength="30" aria-label="Pod name">
+        <p class="pod-count">${countText(c)}</p>
+        ${chips || '<p class="empty-note">Nobody yet.</p>'}
+        <div class="row" style="gap:6px"><button class="btn sm" data-act="pod-add" data-id="${x.id}">+ Add</button>
+          <button class="btn sm ghost danger" data-act="pod-delete" data-id="${x.id}">${ui.podConfirm === x.id ? "Tap again to delete" : "Delete pod"}</button></div>
+      </section>`;
+    }).join("");
+    const left = activePlayers().filter(p => !inPods.has(p.id));
+    return `<section class="zone-sec" id="podsSec"><div class="row" style="justify-content:space-between;gap:8px"><h2 class="sec">Pods</h2><button class="btn sm primary" data-act="pod-new">+ New pod</button></div>
+      <p class="muted" style="margin:8px 0 0">Groups you send out together. On a line's ⋯ menu, "Put pods on this line" fills it from two or more pods. Someone can be in more than one pod.</p>
+      ${podsOf().length ? `<div class="zone-grid">${cards}</div>` : '<p class="empty-note">No pods yet. Tap "+ New pod" to start one.</p>'}
+      ${podsOf().length && left.length ? `<p class="muted" style="font-size:14px;margin:10px 0 0">Not in a pod yet: ${sortPlayers(left).map(p => esc(label(p))).join(", ")}</p>` : ""}
+    </section>`;
+  }
+
   // ---------- render: stats ----------
   function renderStats() {
     const scope = ui.stats.scope;
@@ -822,6 +856,7 @@
       <p class="muted" style="font-size:14px;margin:8px 0 0">The nickname is what shows on line cards. Tap the dot to mark a captain (C) or president (P). "Out" hides someone from the player picker without deleting their stats.</p>
       <div class="roster-cols">${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}</div>
       ${renderZone()}
+      ${renderPods()}
       ${privateCard()}
       <div class="settings">
         <div class="card">
@@ -857,10 +892,12 @@
       if (s.pointId) { const pt = S.points.find(x => x.id === s.pointId); (pt?.lineup || []).forEach(x => taken.add(x.p)); }
       const zMain = s.zone ? s.zone.replace(/_ok$/, "") : "";
       if (s.zone) taken = new Set([...(zoneOf(g)[zMain] || []), ...(zoneOf(g)[zMain + "_ok"] || [])]);
+      const podSel = s.pod ? podsOf().find(x => x.id === s.pod) : null;
+      if (podSel) taken = new Set(podSel.ids);
       const q = (s.q || "").toLowerCase(), f = s.f || "";
       // Picking for a line (not a zone): show how long each person has sat and how many lines
       // they've played, and sort by either, once there's an earlier line or game to go on.
-      const lineIdx = s.pointId && !s.zone ? pts.findIndex(x => x.id === s.pointId) : -1;
+      const lineIdx = s.pointId && !s.zone && !s.pod ? pts.findIndex(x => x.id === s.pointId) : -1;
       let rest = lineIdx >= 0 ? restFor(g, pts, lineIdx) : null;
       if (rest && !rest.any) rest = null;
       const sortBy = !rest ? "az" : ui.pickSort === "played" || ui.pickSort === "az" ? ui.pickSort : "sat";
@@ -880,11 +917,12 @@
       };
       const att = !s.zone && g ? attendanceForGame(g) : null, lateSet = !s.zone ? lateOf(g) : new Set();
       const attText = p => (att && att.n ? ` · <span class="att-mini">${att.count.get(p.id) || 0}/${att.n} practices</span>` : "") + (lateSet.has(p.id) ? ' · <span class="late-mini">late sign-up</span>' : "");
-      const meta0 = p => s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
-      const meta = p => meta0(p) + (taken.has(p.id) ? "" : attText(p));
+      const podMeta = p => { if (taken.has(p.id)) return "in this pod"; const o = podsOf().filter(x => x.id !== s.pod && x.ids.includes(p.id)).map(x => esc(x.name)); return o.length ? "in " + o.join(", ") : ""; };
+      const meta0 = p => s.pod ? podMeta(p) : s.zone && taken.has(p.id) ? ((zoneOf(g)[zMain] || []).includes(p.id) ? "main list" : "backup") : taken.has(p.id) ? "on it" : rest ? restText(p) : (planned.get(p.id) || 0) + " pts planned";
+      const meta = p => meta0(p) + (taken.has(p.id) || s.pod ? "" : attText(p));
       const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(p.name)}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
-      title = s.zone ? "Add to " + zoneName(s.zone) : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
+      title = podSel ? "Add to " + esc(podSel.name) : s.zone ? "Add to " + zoneName(s.zone) : s.current ? "Swap " + esc(label(P(s.current))) : "Add player";
       tools = `<input class="line-in" id="pickQ" placeholder="Search" value="${esc(s.q || "")}" autofocus autocomplete="off">
         <div class="seg" role="group" aria-label="Filter"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div>
         ${rest ? `<div class="seg" role="group" aria-label="Sort">${[["sat", "Lines sat"], ["played", "Lines played"], ["az", "A–Z"]].map(([v, t]) => `<button data-act="pick-sort" data-v="${v}" aria-pressed="${sortBy === v}">${t}</button>`).join("")}</div>` : ""}`;
@@ -899,6 +937,7 @@
           <div class="seg" role="group" aria-label="Points this line plays">${[1, 2, 3, 4].map(v => `<button data-act="pm-plays" data-v="${v}" aria-pressed="${cur === v}">${v}</button>`).join("")}</div>
           <span class="muted">point${cur === 1 ? "" : "s"}</span></div>
         ${pts[i] && !outs(pts[i]).some(o => o.result) && (pts[i].lineup || []).length < SLOTS ? '<button data-act="pm-suggest"><b>Suggest players for the empty spots</b></button>' : ""}
+        ${pts[i] && podsOf().length && !outs(pts[i]).some(o => o.result) ? '<button data-act="pm-pods"><b>Put pods on this line</b></button>' : ""}
         <button data-act="pm-copy">Copy players (to paste into other lines or games)</button>
         <button data-act="pm-dup">Duplicate this line at the end</button>
         <button data-act="pm-insert">Insert a copy right after this line</button>
@@ -976,6 +1015,27 @@
         <p style="margin:0">So far today, not counting captains and president, men have played <b>${s.m.toFixed(1)} points</b> on average and women <b>${s.w.toFixed(1)}</b>.</p>
         <p style="margin:0">Make Line ${s.lineNo} <b>5 men / 2 women</b> to catch up?</p>
         <div class="row"><button class="btn primary" data-act="ratio-five">Yes, 5 men / 2 women</button><button class="btn" data-act="ratio-keep">Keep 4 men / 3 women</button></div>
+      </div>`;
+    } else if (s.type === "pods-line") {
+      const g = game(), pts = g ? gamePoints(g.id) : [], idx = pts.findIndex(x => x.id === s.pointId), pt = pts[idx];
+      const rest = idx >= 0 ? restFor(g, pts, idx) : null;
+      const cur = (pt?.lineup || []).map(x => x.p), keep = s.keep !== false ? cur : [];
+      const chosen = podsOf().filter(x => s.sel.includes(x.id));
+      const ids = [...keep]; chosen.forEach(x => x.ids.forEach(id => { if (P(id) && !ids.includes(id)) ids.push(id); }));
+      const c = podCounts(ids);
+      const restText = x => { if (!rest || !rest.any) return ""; const v = x.ids.map(id => rest.info(id).lines).filter(v => v !== undefined);
+        if (!v.length) return ""; const fresh = v.filter(n => n === null).length, sat = v.filter(n => n !== null);
+        return sat.length ? `sat ${Math.min(...sat)}${Math.min(...sat) !== Math.max(...sat) ? "–" + Math.max(...sat) : ""} line${Math.max(...sat) === 1 ? "" : "s"}${fresh ? ` · ${fresh} not in yet` : ""}` : "not in yet"; };
+      title = "Pods for Line " + (idx + 1);
+      body = `<div class="form">
+        <ul class="pod-pick">${podsOf().map(x => { const pc = podCounts(x.ids), b2b = rest && x.ids.some(id => rest.info(id).lines === 0);
+          return `<li><button data-act="podl-toggle" data-id="${x.id}" aria-pressed="${s.sel.includes(x.id)}">
+            <span class="pp-name">${esc(x.name)}</span>
+            <span class="pp-who">${x.ids.map(id => { const p = P(id); return p ? `<span class="${p.gender || "U"}">${esc(label(p))}</span>` : ""; }).join(" ")}</span>
+            <span class="pp-meta">${pc.w} W · ${pc.m} M${restText(x) ? " · " + restText(x) : ""}${b2b ? ' · <span class="b2b">someone just played</span>' : ""}</span></button></li>`; }).join("")}</ul>
+        <label class="fill-check"><input type="checkbox" id="podKeep" ${s.keep !== false ? "checked" : ""}><span>Keep who's already on the line${cur.length ? ` (${cur.map(id => esc(label(P(id)))).join(", ")})` : ""}</span></label>
+        <p class="pod-total ${c.n > SLOTS ? "over" : ""}"><b>${c.n} of ${SLOTS}</b> · ${c.w} W · ${c.m} M${c.h ? ` · ${c.h} handler${c.h === 1 ? "" : "s"}` : ""}${c.n > SLOTS ? ` · ${c.n - SLOTS} too many` : c.n < SLOTS && chosen.length ? ` · ${SLOTS - c.n} open spot${SLOTS - c.n === 1 ? "" : "s"}` : ""}</p>
+        <div class="row"><button class="btn primary" data-act="podl-go" ${!chosen.length || c.n > SLOTS ? "disabled" : ""}>Put on Line ${idx + 1}</button><button class="btn ghost" data-act="close">Cancel</button></div>
       </div>`;
     } else if (s.type === "late") {
       const t = tours().find(x => x.id === s.tid);
@@ -1435,6 +1495,21 @@
     if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
     if (a === "fill-go") { const s = ui.sheet, ex = $("#fillExisting")?.checked; ui.sheet = null; renderSheet(); autoFill({ newLines: s.n, plays: s.plays, existing: ex }); return; }
     if (a === "ratio-five" || a === "ratio-keep") { const s = ui.sheet; ui.sheet = null; renderSheet(); s.resolve(a === "ratio-five" ? "five" : "keep"); return; }
+    if (a === "pod-new") { const x = { id: uid(), name: nextPodName(), ids: [] }; savePods(n => { n.push(x); }); openSheet({ type: "pick", pod: x.id }); return; }
+    if (a === "pod-add") { openSheet({ type: "pick", pod: id }); return; }
+    if (a === "pod-remove") { const i = +el.dataset.i; savePods(n => { const x = n.find(y => y.id === id); if (x) x.ids.splice(i, 1); }); return; }
+    if (a === "pod-delete") { if (ui.podConfirm !== id) { ui.podConfirm = id; render(); return; } ui.podConfirm = null; savePods(n => { const i = n.findIndex(y => y.id === id); if (i >= 0) n.splice(i, 1); }); return; }
+    if (a === "podl-toggle") { const s = ui.sheet; s.sel = s.sel.includes(id) ? s.sel.filter(x => x !== id) : [...s.sel, id]; renderSheet(); return; }
+    if (a === "podl-go") {
+      const s = ui.sheet, chosen = podsOf().filter(x => s.sel.includes(x.id)), hz = new Set(zoneOf().handlers || []), keep = s.keep !== false;
+      closeSheet();
+      patchPoint(s.pointId, pt => {
+        const line = keep ? (pt.lineup || []).slice() : [];
+        chosen.forEach(x => x.ids.forEach(pid => { if (P(pid) && line.length < SLOTS && !line.some(q => q.p === pid)) line.push({ p: pid, r: hz.has(pid) ? "H" : "C" }); }));
+        pt.lineup = line;
+      });
+      toast(chosen.map(x => x.name).join(" + ") + " on the line"); return;
+    }
     if (a === "fill-late") { ui.lateMode = el.dataset.v; store.set("lateMode", ui.lateMode); renderSheet(); return; }
     if (a === "tour-del") {
       if (!el.dataset.v) { ui.sheet.confirm = true; renderSheet(); return; }
@@ -1479,6 +1554,7 @@
     if (a === "pick") {
       const pid = el.dataset.p, s = ui.sheet;
       if (s.zone) { const z = s.zone; saveZone(n => { n[z] = [...n[z], pid]; }); renderSheet(); return; }
+      if (s.pod) { const k = s.pod; savePods(n => { const x = n.find(y => y.id === k); if (x && !x.ids.includes(pid)) x.ids.push(pid); }); renderSheet(); return; }
       patchPoint(s.pointId, pt => {
         pt.lineup = pt.lineup || [];
         if (pt.lineup.some(x => x.p === pid)) return;   // already on (maybe added from another phone)
@@ -1512,6 +1588,7 @@
       }
       closeSheet();
       if (a === "pm-suggest") autoFill({ only: pid });
+      if (a === "pm-pods") openSheet({ type: "pods-line", pointId: pid, sel: [], keep: true });
       if (a === "pm-copy") {
         const lines = gamePoints(ui.gameId), n = lines.findIndex(x => x.id === pid) + 1, g = game();
         ui.clip = { lineup: (pt.lineup || []).map(y => ({ p: y.p, r: y.r || "" })), from: "Line " + n + (g ? " · " + g.name : "") };
@@ -1551,6 +1628,8 @@
     const el = e.target;
     if (el.id === "gameSel") { ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = el.value; store.set("game", ui.gameId); render(); return; }
     const a = el.dataset.act, id = el.dataset.id;
+    if (a === "pod-name") { const v = el.value.trim().slice(0, 30); const x = podsOf().find(y => y.id === id); if (!x || !v || v === x.name) { if (x) el.value = x.name; return; } savePods(n => { const y = n.find(z => z.id === id); if (y) y.name = v; }); return; }
+    if (el.id === "podKeep") { ui.sheet.keep = el.checked; renderSheet(); return; }
     if (el.id === "fillAtt") { ui.useAtt = el.checked; store.set("useAtt", ui.useAtt); return; }
     if (el.id === "prDate") {
       const pr = (S.practices || []).find(x => x.id === ui.practiceId), v = el.value;

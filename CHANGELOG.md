@@ -2,6 +2,13 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 7, 2026 (night)
+
+**Test board**
+- **Pods.** On the Roster tab, under Zone spots, make named groups of players ("+ New pod", then tap people in). Rename a pod by tapping its name. Someone can be in more than one pod.
+- **Put pods on a line.** In a line's ⋯ menu, "Put pods on this line" lets you pick two or more pods. It shows the total and the women/men count, how long each pod has sat, and warns if someone just played. It keeps whoever is already on the line unless you uncheck that.
+- **Pod tags on lines.** A line made of whole pods shows them, like "Pod A + Pod C".
+
 ## Oct 7, 2026 (evening)
 
 **Real board and test board**
