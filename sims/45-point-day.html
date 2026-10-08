@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>A 45-Point Day</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: a coach's whiteboard. Summary first, then the full day as a scoresheet grid (players × lines). */
+:root{
+  --bg:#f6f7f4; --paper:#ffffff; --ink:#1f2733; --muted:#6b7585; --rule:#dfe3e8;
+  --accent:#1d4db0; --w:#d24a3f; --m:#2a64d4; --w-soft:#f6d9d6; --m-soft:#d8e3f7; --lead:#2b3442; --lead-soft:#e2e5ea;
+  --good:#23824a; --bad:#c2410c; --late:#c25a00;
+  --display:"Kalam","Segoe Print","Bradley Hand",cursive;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181f; --paper:#1c222b; --ink:#e7ebf0; --muted:#97a1b0; --rule:#2c3440;
+  --accent:#8fb0ff; --w:#f07a6f; --m:#79a3f5; --w-soft:#4a2724; --m-soft:#22324f; --lead:#cfd6e0; --lead-soft:#343c48;
+  --good:#5cc48a; --bad:#f59e6b; --late:#f0a050; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#14181f; --paper:#1c222b; --ink:#e7ebf0; --muted:#97a1b0; --rule:#2c3440;
+  --accent:#8fb0ff; --w:#f07a6f; --m:#79a3f5; --w-soft:#4a2724; --m-soft:#22324f; --lead:#cfd6e0; --lead-soft:#343c48;
+  --good:#5cc48a; --bad:#f59e6b; --late:#f0a050; color-scheme:dark }
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 48px;display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--display);font-size:clamp(34px,6vw,52px);line-height:1;margin:0;color:var(--accent);text-wrap:balance}
+h2{font-family:var(--display);font-size:24px;margin:0;color:var(--accent)}
+.lede{margin:6px 0 0;max-width:68ch;color:var(--ink)}
+.note{margin:0;color:var(--muted);font-size:14px;max-width:72ch}
+.facts{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 0;padding:0;list-style:none;font-size:14px;color:var(--muted)}
+.facts b{color:var(--ink);font-variant-numeric:tabular-nums}
+.panel{background:var(--paper);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 0 var(--rule),0 2px 8px rgba(20,30,50,.07);min-width:0}
+.sum{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
+.sum th,.sum td{padding:7px clamp(4px,1.5vw,8px);text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+.sum th:first-child,.sum td:first-child{text-align:left}
+.sum th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.chip{display:inline-block;min-width:44px;padding:1px 7px;border-radius:999px;font-weight:700;font-size:13px;text-align:center}
+.chip.up{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.chip.down{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.chip.flat{background:var(--lead-soft);color:var(--muted)}
+.bar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:700 15px var(--body);padding:6px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.scroll{overflow-x:auto;border-radius:6px}
+table.grid{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums}
+.grid th,.grid td{padding:0;height:24px;text-align:center}
+.grid .gh th{font-family:var(--display);font-size:14px;color:var(--accent);padding:2px 0 0;border-left:2px solid var(--rule);text-align:left;padding-left:6px;white-space:nowrap}
+.grid .lh th{font-size:11px;color:var(--muted);font-weight:700;width:24px;min-width:24px}
+.grid .lh th.five{color:var(--late)}
+.grid .lh th.gs{border-left:2px solid var(--rule)}
+.grid td.c{width:24px;min-width:24px}
+.grid td.gs{border-left:2px solid var(--rule)}
+.grid td.c span{display:block;margin:2px;height:20px;border-radius:3px;line-height:20px;font-weight:700;font-size:10px;color:var(--paper)}
+.grid td.c span.W{background:var(--w)} .grid td.c span.M{background:var(--m)} .grid td.c span.L{background:var(--lead)}
+.grid td.c span.half{opacity:.55}
+.grid .name{position:sticky;left:0;z-index:1;background:var(--paper);text-align:left;padding:0 10px 0 0;white-space:nowrap;min-width:116px}
+.grid .name b{font-weight:700}
+.grid .name .pips{margin-left:6px;letter-spacing:1px;color:var(--muted);font-size:10px}
+.grid .name .late{color:var(--late);font-weight:700;font-size:11px;margin-left:4px}
+.grid tr.sec th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:12px 0 2px;position:sticky;left:0;background:var(--paper)}
+.grid td.tot{padding:0 0 0 12px;text-align:right;font-weight:700;font-size:14px;white-space:nowrap}
+.grid td.dl{padding:0 4px 0 8px;text-align:right}
+.grid tbody tr:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.grid tbody tr:hover td.name{background:var(--paper)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:22px}
+.two > *{min-width:0}
+ul.points{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;max-width:68ch}
+@media (prefers-reduced-motion:no-preference){.grid td.c span{transition:opacity .2s}}
+</style>
+<style>body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>A 45-Point Day</h1>
+    <p class="lede">What Fill lines would do over a full tournament day if every line came from the line maker, with made-up practice attendance plugged in.</p>
+    <ul class="facts" id="facts"></ul>
+  </header>
+
+  <div class="two">
+    <section class="panel">
+      <h2>Points played, by practices made</h2>
+      <div class="scroll"><table class="sum" id="sum"></table></div>
+      <p class="note">Average points per person (captains and president not included; they rotate on their own). "Off" is the same day with the attendance switch turned off in Fill lines.</p>
+    </section>
+    <section class="panel">
+      <h2>What to notice</h2>
+      <ul class="points" id="notes"></ul>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="bar-row">
+      <h2>Every line of the day</h2>
+      <div class="seg" role="group" aria-label="Attendance in Fill lines">
+        <button id="btnOn" aria-pressed="true">Attendance on</button><button id="btnOff" aria-pressed="false">Attendance off</button>
+      </div>
+    </div>
+    <div class="legend"><span><i style="background:var(--w)"></i>Woman on the line</span><span><i style="background:var(--m)"></i>Man on the line</span><span><i style="background:var(--lead)"></i>Captain / president</span><span><b>D</b> deep deep · <b>S</b> short deep · <b>H</b> handler</span><span>Faded = a 1-point line</span><span style="color:var(--late)"><b>5:2</b> = 5 men, 2 women</span></div>
+    <div class="scroll"><table class="grid" id="grid"></table></div>
+    <p class="note">Players other than the captains and president use stand-in names (W1, M1…), numbered from most practices to fewest, so made-up attendance isn't pinned on a real person. The dots after each name are practices made out of 6.</p>
+  </section>
+</div>
+<script>
+const D = {"N":6,"games":[12,12,11,10],"players":[{"id":"Izzy","label":"Izzy","g":"W","badge":"C","att":6,"late":false},{"id":"Zoe","label":"Zoe","g":"W","badge":"C","att":6,"late":false},{"id":"Teague","label":"Teague","g":"M","badge":"C","att":6,"late":false},{"id":"Sully","label":"Sully","g":"M","badge":"C","att":6,"late":false},{"id":"Joshua","label":"Joshua","g":"M","badge":"C","att":6,"late":false},{"id":"Sam M","label":"Sam M","g":"M","badge":"P","att":6,"late":false},{"id":"W5","label":"W5","g":"W","badge":"","att":4,"late":false},{"id":"W3","label":"W3","g":"W","badge":"","att":5,"late":false},{"id":"W1","label":"W1","g":"W","badge":"","att":6,"late":false},{"id":"W4","label":"W4","g":"W","badge":"","att":5,"late":false},{"id":"W7","label":"W7","g":"W","badge":"","att":2,"late":false},{"id":"W8","label":"W8","g":"W","badge":"","att":1,"late":false},{"id":"W6","label":"W6","g":"W","badge":"","att":3,"late":false},{"id":"W9","label":"W9","g":"W","badge":"","att":0,"late":false},{"id":"W2","label":"W2","g":"W","badge":"","att":6,"late":false},{"id":"M4","label":"M4","g":"M","badge":"","att":5,"late":false},{"id":"M8","label":"M8","g":"M","badge":"","att":3,"late":true},{"id":"M1","label":"M1","g":"M","badge":"","att":6,"late":false},{"id":"M12","label":"M12","g":"M","badge":"","att":0,"late":false},{"id":"M5","label":"M5","g":"M","badge":"","att":5,"late":false},{"id":"M9","label":"M9","g":"M","badge":"","att":3,"late":false},{"id":"M11","label":"M11","g":"M","badge":"","att":1,"late":false},{"id":"M2","label":"M2","g":"M","badge":"","att":6,"late":false},{"id":"M6","label":"M6","g":"M","badge":"","att":4,"late":false},{"id":"M3","label":"M3","g":"M","badge":"","att":6,"late":false},{"id":"M7","label":"M7","g":"M","badge":"","att":4,"late":false},{"id":"M10","label":"M10","g":"M","badge":"","att":2,"late":false}],"on":{"pts":{"Joshua":15,"Izzy":14,"M3":12,"M1":12,"W1":12,"M2":12,"W2":14,"Sully":16,"Teague":17,"W3":11,"M5":12,"M4":12,"W4":12,"W5":11,"Zoe":14,"Sam M":14,"W7":12,"M7":10,"M6":10,"W6":10,"M9":10,"M10":9,"W8":10,"W9":9,"M11":9,"M12":8,"M8":8},"lines":[{"g":0,"plays":2,"ids":["Joshua","Izzy","M3","M1","W1","M2","W2"],"h":["Joshua","Izzy","M3"],"dd":"Joshua","sd":"M3","five":false},{"g":0,"plays":2,"ids":["Sully","Teague","W3","M5","M4","W4","W5"],"h":["Sully","Teague"],"dd":"Sully","sd":"W3","five":false},{"g":0,"plays":2,"ids":["Zoe","Sam M","W7","M7","M6","W6","M9"],"h":["Zoe","Sam M","W7"],"dd":"Sam M","sd":"W7","five":false},{"g":0,"plays":2,"ids":["Joshua","Teague","M3","M10","W8","W9","W2"],"h":["Joshua","Teague","M3"],"dd":"Joshua","sd":"M3","five":false},{"g":0,"plays":2,"ids":["Izzy","Sully","M4","M11","M12","W1","W4"],"h":["Izzy","Sully"],"dd":"Sully","sd":"M4","five":false},{"g":0,"plays":2,"ids":["Zoe","Teague","W3","M8","M1","M2","W5"],"h":["Zoe","Teague"],"dd":"Teague","sd":"W3","five":false},{"g":1,"plays":2,"ids":["Sam M","Joshua","W7","M5","M7","W6","W2"],"h":["Sam M","Joshua","W7"],"dd":"Sam M","sd":"W7","five":false},{"g":1,"plays":2,"ids":["Izzy","Zoe","M10","M3","M6","M9","W8"],"h":["Izzy","Zoe","M3"],"dd":"M10","sd":"M3","five":false},{"g":1,"plays":2,"ids":["Sully","Joshua","W4","W9","W1","M4","M11"],"h":["Sully","Joshua"],"dd":"Sully","sd":"W4","five":false},{"g":1,"plays":2,"ids":["Teague","Sam M","W3","M12","M2","W5","W2"],"h":["Teague","Sam M"],"dd":"Teague","sd":"W3","five":false},{"g":1,"plays":2,"ids":["Zoe","Sully","W7","M1","M8","M5","M7"],"h":["Zoe","Sully","W7"],"dd":"Sully","sd":"W7","five":true},{"g":1,"plays":2,"ids":["Izzy","Teague","M3","W6","M6","M9","W8"],"h":["Izzy","Teague","M3"],"dd":"Teague","sd":"M3","five":false},{"g":2,"plays":2,"ids":["Joshua","Zoe","M4","M10","W1","W4","M11"],"h":["Joshua","Zoe"],"dd":"Joshua","sd":"M4","five":false},{"g":2,"plays":2,"ids":["Sam M","Sully","W3","W9","M2","W2","M12"],"h":["Sam M","Sully"],"dd":"Sam M","sd":"W3","five":false},{"g":2,"plays":2,"ids":["Izzy","Teague","W7","W5","M1","M5","M7"],"h":["Izzy","Teague","W7"],"dd":"Teague","sd":"W7","five":false},{"g":2,"plays":2,"ids":["Zoe","Joshua","M3","M8","M6","W6","W8"],"h":["Zoe","Joshua","M3"],"dd":"Joshua","sd":"M3","five":false},{"g":2,"plays":2,"ids":["Sully","Sam M","W4","M9","W1","M4","W2"],"h":["Sully","Sam M"],"dd":"Sully","sd":"W4","five":false},{"g":2,"plays":1,"ids":["Teague","Joshua","W3","M10","M11","W9","W5"],"h":["Teague","Joshua"],"dd":"Teague","sd":"W3","five":false},{"g":3,"plays":2,"ids":["Izzy","Sam M","W7","M2","M12","M1","M5"],"h":["Izzy","Sam M","W7"],"dd":"Sam M","sd":"W7","five":true},{"g":3,"plays":2,"ids":["Zoe","Sully","M3","M7","M6","W6","W8"],"h":["Zoe","Sully","M3"],"dd":"Sully","sd":"M3","five":false},{"g":3,"plays":2,"ids":["Teague","Sam M","W4","M8","W2","W1","M4"],"h":["Teague","Sam M"],"dd":"Teague","sd":"W4","five":false},{"g":3,"plays":2,"ids":["Joshua","Izzy","W3","M9","M10","M11","M2"],"h":["Joshua","Izzy"],"dd":"Joshua","sd":"W3","five":true},{"g":3,"plays":2,"ids":["Sully","Teague","W7","W5","W9","M1","M5"],"h":["Sully","Teague","W7"],"dd":"Sully","sd":"W7","five":false}]},"off":{"pts":{"Joshua":15,"Izzy":14,"M3":12,"M1":10,"W1":12,"W8":12,"M10":12,"Sully":16,"Teague":17,"W7":11,"M5":10,"M11":10,"W9":12,"W2":11,"Zoe":14,"Sam M":14,"M4":12,"W6":12,"M7":10,"M6":10,"W4":11,"W3":10,"M12":9,"M2":10,"W5":10,"M9":9,"M8":10},"lines":[{"g":0,"plays":2,"ids":["Joshua","Izzy","M3","M1","W1","W8","M10"],"h":["Joshua","Izzy","M3"],"dd":"Joshua","sd":"M3","five":false},{"g":0,"plays":2,"ids":["Sully","Teague","W7","M5","M11","W9","W2"],"h":["Sully","Teague","W7"],"dd":"Sully","sd":"W7","five":false},{"g":0,"plays":2,"ids":["Zoe","Sam M","M4","W6","M7","M6","W4"],"h":["Zoe","Sam M"],"dd":"Sam M","sd":"M4","five":false},{"g":0,"plays":2,"ids":["Joshua","Teague","W3","M12","M2","W5","W8"],"h":["Joshua","Teague"],"dd":"Joshua","sd":"W3","five":false},{"g":0,"plays":2,"ids":["Izzy","Sully","M3","M9","M8","W1","W9"],"h":["Izzy","Sully","M3"],"dd":"Sully","sd":"M3","five":false},{"g":0,"plays":2,"ids":["Zoe","Teague","W7","M10","M1","M5","W2"],"h":["Zoe","Teague","W7"],"dd":"Teague","sd":"W7","five":false},{"g":1,"plays":2,"ids":["Sam M","Joshua","W4","M11","M7","W6","W5"],"h":["Sam M","Joshua"],"dd":"Sam M","sd":"W4","five":false},{"g":1,"plays":2,"ids":["Izzy","Zoe","M10","M4","M6","W8","M12"],"h":["Izzy","Zoe"],"dd":"M10","sd":"M4","five":false},{"g":1,"plays":2,"ids":["Sully","Joshua","W3","M2","M9","W1","W9"],"h":["Sully","Joshua"],"dd":"Sully","sd":"W3","five":false},{"g":1,"plays":2,"ids":["Teague","Sam M","M3","M8","W2","W7","W4"],"h":["Teague","Sam M","M3"],"dd":"Teague","sd":"M3","five":false},{"g":1,"plays":2,"ids":["Zoe","Sully","M4","M1","M5","M11","W6"],"h":["Zoe","Sully"],"dd":"Sully","sd":"M4","five":true},{"g":1,"plays":2,"ids":["Izzy","Teague","W3","M7","W5","M10","M6"],"h":["Izzy","Teague"],"dd":"Teague","sd":"W3","five":false},{"g":2,"plays":2,"ids":["Joshua","Zoe","M3","W8","M12","W9","M9"],"h":["Joshua","Zoe","M3"],"dd":"Joshua","sd":"M3","five":false},{"g":2,"plays":2,"ids":["Sam M","Sully","W7","M2","W1","W4","M8"],"h":["Sam M","Sully","W7"],"dd":"Sam M","sd":"W7","five":false},{"g":2,"plays":2,"ids":["Izzy","Teague","M4","W2","W6","M11","M5"],"h":["Izzy","Teague"],"dd":"Teague","sd":"M4","five":false},{"g":2,"plays":2,"ids":["Zoe","Joshua","W3","M1","M10","M6","W5"],"h":["Zoe","Joshua"],"dd":"Joshua","sd":"W3","five":false},{"g":2,"plays":2,"ids":["Sully","Sam M","M3","M7","W8","W9","W1"],"h":["Sully","Sam M","M3"],"dd":"Sully","sd":"M3","five":false},{"g":2,"plays":1,"ids":["Teague","Joshua","W7","M9","M12","W4","W2"],"h":["Teague","Joshua","W7"],"dd":"Teague","sd":"W7","five":false},{"g":3,"plays":2,"ids":["Izzy","Sam M","M4","M8","M2","W6","M11"],"h":["Izzy","Sam M"],"dd":"Sam M","sd":"M4","five":true},{"g":3,"plays":2,"ids":["Zoe","Sully","W3","M5","M10","M6","W5"],"h":["Zoe","Sully"],"dd":"Sully","sd":"W3","five":false},{"g":3,"plays":2,"ids":["Teague","Sam M","M3","M1","W8","W9","W1"],"h":["Teague","Sam M","M3"],"dd":"Teague","sd":"M3","five":false},{"g":3,"plays":2,"ids":["Joshua","Izzy","W7","M7","M12","M9","M2"],"h":["Joshua","Izzy","W7"],"dd":"Joshua","sd":"W7","five":true},{"g":3,"plays":2,"ids":["Sully","Teague","W4","W2","M8","M4","W6"],"h":["Sully","Teague"],"dd":"Sully","sd":"W4","five":false}]}};
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const P = Object.fromEntries(D.players.map(p => [p.id, p]));
+const fmt = n => (Math.round(n * 10) / 10).toFixed(1);
+const chip = d => { const r = Math.round(d * 10) / 10; return `<span class="chip ${r > 0.05 ? "up" : r < -0.05 ? "down" : "flat"}">${r > 0 ? "+" : ""}${r.toFixed(1)}</span>`; };
+
+// Facts
+const nLines = D.on.lines.length, fives = D.on.lines.filter(l => l.five).length;
+$("#facts").innerHTML = [
+  `<li><b>45</b> points</li>`, `<li><b>${D.games.length}</b> games (${D.games.join(", ")} pts)</li>`,
+  `<li><b>${nLines}</b> lines, 2 points each</li>`, `<li><b>${D.players.length}</b> players</li>`,
+  `<li><b>${D.N}</b> practices since the last tournament</li>`, `<li><b>1</b> late sign-up</li>`].join("");
+
+// Summary by practices made
+const non = D.players.filter(p => !p.badge);
+const tiers = [["5–6 practices", p => !p.late && p.att >= 5], ["3–4 practices", p => !p.late && p.att >= 3 && p.att <= 4], ["0–2 practices", p => !p.late && p.att <= 2], ["Late sign-up", p => p.late]];
+const avg = (list, run) => list.reduce((a, p) => a + (D[run].pts[p.id] || 0), 0) / list.length;
+$("#sum").innerHTML = `<thead><tr><th>Made</th><th>People</th><th>On</th><th>Off</th><th>Change</th></tr></thead><tbody>` +
+  tiers.map(([name, f]) => { const l = non.filter(f); const on = avg(l, "on"), off = avg(l, "off");
+    return `<tr><td>${name}</td><td>${l.length}</td><td><b>${fmt(on)}</b></td><td>${fmt(off)}</td><td>${chip(on - off)}</td></tr>`; }).join("") + `</tbody>`;
+
+// Notes
+const late = non.find(p => p.late);
+const firstLine = (run, id) => D[run].lines.findIndex(l => l.ids.includes(id)) + 1;
+const regs = non.filter(p => !p.late && p.att >= 5), lows = non.filter(p => !p.late && p.att <= 2);
+const firstRegs = D.on.lines[0].ids.filter(id => !P[id].badge);
+const lead = D.players.filter(p => p.badge).map(p => D.on.pts[p.id]);
+const allNon = non.map(p => D.on.pts[p.id] || 0);
+$("#notes").innerHTML = [
+  `People at 5–6 practices play about <b>${fmt(avg(regs, "on") - avg(regs, "off"))} more points</b> than they would with attendance off. People at 0–2 play about <b>${fmt(avg(lows, "off") - avg(lows, "on"))} fewer</b>. Nobody gets benched: the lowest non-captain still plays ${Math.min(...allNon)} points and the highest ${Math.max(...allNon)}.`,
+  `The first line of the day is ${firstRegs.map(id => `<b>${esc(id)}</b> (${P[id].att}/${D.N})`).join(", ")} plus two captains.`,
+  `The late sign-up (<b>${esc(late.id)}</b>) first goes out on line ${firstLine("on", late.id)}, after everyone else's first shift, then rotates normally: ${D.on.pts[late.id]} points on the day.`,
+  `Captains and president play ${Math.min(...lead)}–${Math.max(...lead)} points each, about every third line, same as before.`,
+  `${fives} of the ${nLines} lines are 5 men / 2 women, from the popup that keeps the men from falling behind.`,
+].map(t => `<li>${t}</li>`).join("");
+
+// Grid
+function grid(run) {
+  const lines = D[run].lines;
+  let gh = `<tr class="gh"><th class="name"></th>`, lh = `<tr class="lh"><th class="name"></th>`;
+  D.games.forEach((pts, g) => { const ls = lines.filter(l => l.g === g); gh += `<th colspan="${ls.length}">Game ${g + 1}</th>`; });
+  gh += `<th></th><th></th></tr>`;
+  let n = 0; lines.forEach((l, i) => { const gs = i === 0 || lines[i - 1].g !== l.g; if (gs) n = 0; n++;
+    lh += `<th class="${gs ? "gs " : ""}${l.five ? "five" : ""}" title="${l.five ? "5 men / 2 women" : ""}">${l.five ? "5:2" : n}</th>`; });
+  lh += `<th style="text-align:right;padding-left:12px">Pts</th><th style="text-align:right;padding-left:8px">vs off</th></tr>`;
+  const row = p => {
+    const pips = "●".repeat(p.att) + "○".repeat(D.N - p.att);
+    let cells = "";
+    lines.forEach((l, i) => { const gs = i === 0 || lines[i - 1].g !== l.g, on = l.ids.includes(p.id);
+      const mark = l.dd === p.id ? "D" : l.sd === p.id ? "S" : l.h.includes(p.id) ? "H" : "";
+      cells += `<td class="c${gs ? " gs" : ""}">${on ? `<span class="${p.badge ? "L" : p.g}${l.plays === 1 ? " half" : ""}" title="${esc(p.id)} · line ${i + 1}">${mark}</span>` : ""}</td>`; });
+    const d = (D[run].pts[p.id] || 0) - (D.off.pts[p.id] || 0);
+    return `<tr><td class="name"><b>${esc(p.id)}</b>${p.badge ? ` <small style="color:var(--muted)">${p.badge === "P" ? "pres" : "capt"}</small>` : `<span class="pips" aria-label="${p.att} of ${D.N} practices">${pips}</span>`}${p.late ? '<span class="late">late</span>' : ""}</td>${cells}<td class="tot">${D[run].pts[p.id] || 0}</td><td class="dl">${run === "on" && !p.badge ? chip(d) : ""}</td></tr>`;
+  };
+  const sec = t => `<tr class="sec"><th colspan="${lines.length + 3}">${t}</th></tr>`;
+  const lead = D.players.filter(p => p.badge), W = non.filter(p => p.g === "W"), M = non.filter(p => p.g === "M");
+  const byAtt = (a, b) => b.att - a.att || a.id.localeCompare(b.id, undefined, { numeric: true });
+  $("#grid").innerHTML = `<thead>${gh}${lh}</thead><tbody>${sec("Captains and president")}${lead.map(row).join("")}${sec("Women")}${W.sort(byAtt).map(row).join("")}${sec("Men")}${M.sort(byAtt).map(row).join("")}</tbody>`;
+}
+function show(run) { $("#btnOn").setAttribute("aria-pressed", run === "on"); $("#btnOff").setAttribute("aria-pressed", run === "off"); grid(run); }
+$("#btnOn").addEventListener("click", () => show("on"));
+$("#btnOff").addEventListener("click", () => show("off"));
+show("on");
+</script>
+</body>
+</html>
