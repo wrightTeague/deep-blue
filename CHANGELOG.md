@@ -5,6 +5,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 7, 2026 (night)
 
 **Test board**
+- **Tournament pages.** Tapping a tournament on Home opens its own page: date, where, record, and a list of its games in order with each one's score or status ("No lines yet", "3 lines planned", "In progress · Pt 7 next"). Tap a game to open its lines. The page also has "+ Add game", late sign-ups, tournament stats and edit. A tournament with no games shows its page too, instead of popping up the new-game form.
+- **Back to the tournament.** On a game, the tournament name above the game name takes you back to the tournament's page.
 - **Pods.** On the Roster tab, under Zone spots, make named groups of players ("+ New pod", then tap people in). Rename a pod by tapping its name. Someone can be in more than one pod.
 - **Put pods on a line.** In a line's ⋯ menu, "Put pods on this line" lets you pick two or more pods. It shows the total and the women/men count, how long each pod has sat, and warns if someone just played. It keeps whoever is already on the line unless you uncheck that.
 - **Pod tags on lines.** A line made of whole pods shows them, like "Pod A + Pod C".

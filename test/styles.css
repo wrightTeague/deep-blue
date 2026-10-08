@@ -411,3 +411,20 @@ button.brand{border:0;background:transparent;padding:0;cursor:pointer;text-align
 .pp-meta .b2b{color:#c25a00;font-weight:700}
 .pod-total{margin:0;font-size:16px;font-variant-numeric:tabular-nums}
 .pod-total.over{color:var(--red)}
+
+/* ---------- tournament page ---------- */
+.eyebrow-link{border:0;background:transparent;padding:0;font:inherit;color:var(--blue);letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+.eyebrow-link:hover{text-decoration:underline}
+.tour-meta{margin:4px 0 0;font-size:17px}
+.tgames{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-width:760px}
+.tgame{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:12px;align-items:center;text-align:left;border:0;background:var(--paper);box-shadow:var(--lift);border-radius:6px;padding:12px 14px;min-height:60px;cursor:pointer;border-top:4px solid var(--blue)}
+.tgame:hover{background:#f7f8fa}
+.tg-n{font-family:var(--hand);font-weight:700;font-size:22px;color:var(--faint);min-width:20px}
+.tg-main{display:flex;flex-direction:column;min-width:0}
+.tg-main b{font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg-main small{font-size:14px;color:var(--muted)}
+.tg-score{font-family:var(--hand);font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+.tg-score.won{color:#2f9a57} .tg-score.lost{color:var(--red)}
+.tg-go{font-size:24px;color:var(--faint)}
+.tgames-empty{background:var(--paper);box-shadow:var(--lift);border-radius:6px;padding:16px;max-width:760px}
+.tgames-empty p{margin:0 0 4px}
