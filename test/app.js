@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.22"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.23"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -376,7 +376,8 @@
     return `<div class="above">${whead}
         <div class="wide-grid"><div id="pointsTrack" class="lines-grid">${top.map(i => cardC(i)).join("") || '<div class="add-card"><p>No lines yet. Add one, or let Fill lines plan a few.</p></div>'}</div>
         <aside class="side card">${pointsChart(lines, true) || '<p class="muted" style="margin:0">Points per person shows up once there are lines.</p>'}</aside></div>
-      </div>${rest.length ? deep(`<div class="deep-title"><span class="eyebrow">Planned ↓ ${range}</span><span class="muted">Click a name to swap.</span></div><div class="lines-grid">${rest.map(i => cardC(i, true)).join("")}</div>`) : ""}`;
+      </div>${deep(rest.length ? `<div class="deep-title"><span class="eyebrow">Planned ↓ ${range}</span><span class="muted">Click a name to swap.</span></div><div class="lines-grid">${rest.map(i => cardC(i, true)).join("")}</div>`
+        : `<div class="deep-title"><span class="eyebrow">Planned ↓</span><span class="muted">${lines.length ? `Nothing planned after Line ${lines.length}.` : "No lines planned yet."}</span></div><button class="add-dashed" data-act="add-point">+ Add line</button>`)}`;
   }
 
   function clipBar() {
