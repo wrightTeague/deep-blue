@@ -2,6 +2,16 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 9, 2026
+
+**Test board**
+- **New look ("Waterline").** The whole test board is redesigned: new fonts, a navy tab bar along the bottom on phones, and each page split at a wave. What you act on now sits above the water; history, lists and settings sit below it.
+- **Points.** On a phone you see one line at a time with big name tiles. "Up next" and earlier lines sit below the wave, along with points per person. Tap the game name to switch games. Played points fold into one row with an Edit button. On a laptop, the played, current and next lines sit side by side next to points per person, and the planned lines sit below the water.
+- **Home, tournament and practice pages** follow the new layout. Home has a countdown to the next tournament and the season list below the water.
+- **Roster.** Players show as tiles. Tap one to open a panel where you can change the name, W/M, badge, mark them out or remove them. Zone spots, pods and board settings sit below the water. Tap ⋯ on a pod to rename it, add or remove people, or delete it.
+- **Add a player** asks for the nickname first. The full name is optional.
+- **Stats, pop-ups and the passcode screen** all use the new look.
+
 ## Oct 7, 2026 (night)
 
 **Test board**
