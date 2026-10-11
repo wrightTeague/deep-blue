@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.25"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.26"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -38,7 +38,7 @@
   let CODE = store.get("code", "");
   let OWNER = store.get("owner", "");  // private settings code, only on this device
   let S = { team: null, tournaments: [], players: [], games: [], points: [], practices: [] };
-  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "home"))), tourId: store.get("tourId", null), gameId: store.get("game", null), stats: { scope: "game", sort: "pts" }, sheet: null, sync: "connecting", rosterFilter: "" };
+  const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "home"))), tourId: store.get("tourId", null), gameId: store.get("game", null), stats: { scope: store.get("statsScope", "game"), sort: "pts", tourId: store.get("statsTour", null) }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
@@ -247,18 +247,10 @@
     const keep = active && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
     const tabNow = ui.tab === "tour" ? "home" : ui.tab;
     const tabsHTML = TABS.map(([k, t]) => `<button data-act="tab" data-tab="${k}" ${tabNow === k ? 'aria-current="page"' : ""}>${t}</button>`).join("");
-    const opt = (g, withDate) => `<option value="${g.id}" ${g.id === ui.gameId ? "selected" : ""}>${esc(g.name)}${withDate && g.game_date ? " · " + fmtDate(g.game_date) : ""}</option>`;
-    const loose = S.games.filter(g => !tourOf(g));
-    const gameOpts = tours().map(t => { const gs = S.games.filter(g => g.tournament_id === t.id); return gs.length ? `<optgroup label="${esc(t.name)}">${gs.map(g => opt(g, false)).join("")}</optgroup>` : ""; }).join("")
-      + (loose.length ? (tours().length ? `<optgroup label="Other games">${loose.map(g => opt(g, true)).join("")}</optgroup>` : loose.map(g => opt(g, true)).join("")) : "");
     ui.wasWide = wide();
     app.innerHTML = `
       <header class="top"><div class="top-in">
         <button class="brand" data-act="tab" data-tab="home" aria-label="Deep Blue, go to Home">${LOGO}<span>Deep Blue</span> <span class="test-tag">TEST</span></button>
-        <div class="game-pick"${ui.tab === "points" || ui.tab === "stats" ? "" : " hidden"}>
-          ${S.games.length ? `<select id="gameSel" aria-label="Game">${gameOpts}</select>` : ""}
-          <button class="icon-btn" data-act="game-menu" aria-label="Game options">⋯</button>
-        </div>
         <nav class="tabs" aria-label="Sections">${tabsHTML}</nav>
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
         <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
@@ -333,19 +325,34 @@
   // First point number of each line.
   const lineStarts = lines => { let n = 1; return lines.map(pt => { const f = n; n += playsOf(pt); return f; }); };
 
+  // The tournament (back to its page), then the game name, which opens the game list. On Points
+  // the game's ⋯ menu sits right beside its name.
+  function gameTitle(g, withMenu) {
+    const t = tourOf(g);
+    return `<div class="gh-l">${t ? `<button class="back-link" data-act="home-tour" data-id="${t.id}">‹ ${esc(t.name)}</button>` : ""}
+      <div class="gh-row"><button class="gh-name gh-pick" data-act="games" aria-label="${esc(g.name)}, switch game">${esc(g.name)} <span aria-hidden="true">▾</span></button>${withMenu ? '<button class="icon-btn gh-menu" data-act="game-menu" aria-label="Game options">⋯</button>' : ""}</div></div>`;
+  }
+
+  // A game on a later day with nothing played yet is being planned: no score, no NOW point,
+  // no result buttons, and Fill lines up front.
+  const gameDay = g => (g && (g.game_date || tourOf(g)?.start_date)) || null;
+  const isPlanning = (g, lines) => { const d = gameDay(g); return !!d && d > todayISO() && !lines.some(pt => outs(pt).some(o => o.result)); };
+  function scoreBlock(g, st, plan, inline) {
+    if (plan) { const d = gameDay(g); return `<div class="score plan${inline ? " inline" : ""}"><small>Planning</small><b>${whenText(d)}</b><small>${fmtDay(d)}</small></div>`; }
+    return inline ? "" : `<div class="score"><b>${st.us}–${st.them}</b><small>${plural(st.holds, "hold")} · ${plural(st.breaks, "break")}</small></div>`;
+  }
+
   function renderPoints() {
     const g = game(); if (!g) return noGame();
     if (ui.editLines) return renderEditLines(g);
-    const lines = gamePoints(g.id), st = computeStats(lines).team, now = nowPoint(lines), starts = lineStarts(lines), t = tourOf(g);
-    const head = `<div class="game-head">
-        <div class="gh-l">${t ? `<button class="back-link" data-act="home-tour" data-id="${t.id}">‹ ${esc(t.name)}</button>` : ""}<button class="gh-name gh-pick" data-act="games" aria-label="${esc(g.name)}, switch game">${esc(g.name)} <span aria-hidden="true">▾</span></button></div>
-        <div class="score"><b>${st.us}–${st.them}</b><small>${plural(st.holds, "hold")} · ${plural(st.breaks, "break")}</small></div>
-      </div>`;
+    const lines = gamePoints(g.id), st = computeStats(lines).team, plan = isPlanning(g, lines), now = plan ? null : nowPoint(lines), starts = lineStarts(lines), t = tourOf(g);
+    const head = `<div class="game-head">${gameTitle(g, true)}${scoreBlock(g, st, plan)}</div>`;
     const card = i => lineCard(lines[i], i, starts[i], restFor(g, lines, i), now && now.line === i ? now.k : -1, { lines, now });
-    if (wide()) return renderPointsWide(g, lines, head, card, now);
+    if (wide()) return renderPointsWide(g, lines, head, card, now, plan);
     const i = focusIndex(lines);
-    const addCard = `<div class="add-card"><p>${lines.length ? "Add another line to this game." : "No lines yet. Add one, or let the line maker fill a few."}</p>
-        <div class="two-btns"><button class="btn primary" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="btn" data-act="paste-new">+ Paste as new line</button>' : '<button class="btn" data-act="fill-open">Fill lines</button>'}</div></div>`;
+    const addCard = `<div class="add-card"><p>${lines.length ? "Add another line to this game." : "No lines yet. Let the line maker fill a few, or add one yourself."}</p>
+        <div class="two-btns">${ui.clip ? '<button class="btn primary" data-act="add-point">+ Add line</button><button class="btn" data-act="paste-new">+ Paste as new line</button>' : !lines.length || plan ? '<button class="btn primary" data-act="fill-open">Fill lines</button><button class="btn" data-act="add-point">+ Add line</button>' : '<button class="btn primary" data-act="add-point">+ Add line</button><button class="btn" data-act="fill-open">Fill lines</button>'}</div></div>`;
+    const planBtns = plan && lines.length && i < lines.length ? `<div class="two-btns plan-btns"><button class="btn primary" data-act="fill-open">Fill lines</button><button class="btn" data-act="add-point">+ Add line</button></div>` : "";
     // Below the waterline: the lines after this one (up next first), then the ones before.
     const names = (pt, small) => `<span class="names">${(pt.lineup || []).map(s => { const p = P(s.p); return `<span><i class="dot ${p?.gender || ""}"></i>${esc(label(p))}${p?.badge ? " " + p.badge : ""}</span>`; }).join("") || "<span>No players yet</span>"}</span>`;
     const dots = pt => `<span class="rdots">${outs(pt).map(o => `<i class="rdot ${o.result === "us" ? "us" : o.result === "them" ? "them" : ""}"></i>`).join("")}</span>`;
@@ -357,18 +364,18 @@
       <div class="deep-actions">${i < lines.length ? '<button class="add-dashed" data-act="add-point">+ Add line</button>' : ""}${ui.clip && i < lines.length ? '<button class="add-dashed" data-act="paste-new">+ Paste as new line</button>' : ""}</div>
       ${before.length ? `<span class="eyebrow" style="margin-top:8px">Earlier lines</span><div>${before.slice().reverse().map(j => row(j, false)).join("")}</div>` : ""}
       ${pointsChart(lines)}`;
-    return `<div class="above">${head}<div id="pointsTrack">${i < lines.length ? card(i) : addCard}</div></div>${deep(below)}`;
+    return `<div class="above">${head}${planBtns}<div id="pointsTrack">${i < lines.length ? card(i) : addCard}</div></div>${deep(below)}`;
   }
 
   // Laptops: the played, NOW and next lines above the water beside points per person; the
   // lines planned further ahead below it.
-  function renderPointsWide(g, lines, head, card, now) {
+  function renderPointsWide(g, lines, head, card, now, plan) {
     const t = tourOf(g), st = computeStats(lines).team, starts = lineStarts(lines);
     const cardC = (i, dark) => lineCard(lines[i], i, starts[i], restFor(g, lines, i), now && now.line === i ? now.k : -1, { lines, now, compact: true, dark });
-    const cut = now ? now.line + 2 : lines.length, top = lines.map((_, i) => i).filter(i => i < cut), rest = lines.map((_, i) => i).filter(i => i >= cut);
+    const cut = now ? now.line + 2 : plan ? Math.min(3, lines.length) : lines.length, top = lines.map((_, i) => i).filter(i => i < cut), rest = lines.map((_, i) => i).filter(i => i >= cut);
     const whead = `<div class="game-head wide">
-        <div class="gh-l">${t ? `<button class="back-link" data-act="home-tour" data-id="${t.id}">‹ ${esc(t.name)}${t.start_date ? " · " + fmtDay(t.start_date) : ""}</button>` : ""}<h1 class="gh-name">${esc(g.name)}</h1></div>
-        <div class="score inline"><b>${st.us}–${st.them}</b><small>${plural(st.holds, "hold")} · ${plural(st.breaks, "break")}${now ? ` · <button class="link-btn" data-act="jump-now">Pt ${now.n} is on</button>` : ""}</small></div>
+        ${gameTitle(g, true)}
+        ${plan ? scoreBlock(g, st, true, true) : `<div class="score inline"><b>${st.us}–${st.them}</b><small>${plural(st.holds, "hold")} · ${plural(st.breaks, "break")}${now ? ` · <button class="link-btn" data-act="jump-now">Pt ${now.n} is on</button>` : ""}</small></div>`}
         <span class="grow"></span>
         <div class="row"><button class="btn primary" data-act="fill-open">Fill lines</button>${lines.length ? '<button class="btn" data-act="edit-lines">Edit lines</button>' : ""}<button class="btn dashed" data-act="add-point">+ Add line</button>${ui.clip ? '<button class="btn" data-act="paste-new">+ Paste as new line</button>' : ""}</div>
       </div>`;
@@ -420,7 +427,7 @@
         sat === undefined ? "" : sat === null ? '<span class="t-first">1st shift</span>' : sat === 0 ? '<span class="t-b2b">back to back</span>' : `sat ${sat}`,
         gN || aN ? `<span class="t-ga">${[gN ? (gN > 1 ? gN : "") + "G" : "", aN ? (aN > 1 ? aN : "") + "A" : ""].filter(Boolean).join(" ")}</span>` : "",
       ].filter(Boolean);
-      tiles.push(`<div class="tile"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="tn"><span class="nm">${esc(label(p))}${badge(p)}</span><span class="tag">${bits.join(" · ") || "&nbsp;"}</span></span></button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button></div>`);
+      tiles.push(`<div class="tile"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="tn"><span class="nm">${esc(label(p))}${badge(p)}</span><span class="tag">${bits.join(" · ") || "&nbsp;"}</span></span></button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change" title="Handler (H) or cutter (C): tap to switch">${r || "–"}</button></div>`);
     }
     if (compact) {
       tiles.length = 0;
@@ -429,7 +436,7 @@
         if (!s) { tiles.push(`<li><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`); continue; }
         const p = P(s.p), r = s.r === "P" ? "C" : (s.r || ""), gN = goals.get(s.p) || 0, aN = assists.get(s.p) || 0;
         const sat = rest && rest.any ? rest.info(s.p).pts : undefined;
-        tiles.push(`<li class="prow"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}" title="${sat === undefined ? "" : sat === null ? "1st shift" : sat === 0 ? "back to back" : "sat " + sat + " pts"}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${gN || aN ? `<span class="t-ga">${[gN ? "G" : "", aN ? "A" : ""].filter(Boolean).join("")}</span>` : ""}${sat === 0 ? '<span class="t-b2b" aria-label="back to back">●</span>' : ""}<span class="grow"></span>${s.p === spots.deep ? '<span class="pos dd">DD</span>' : s.p === spots.short ? '<span class="pos sd">SD</span>' : ""}</button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change">${r || "–"}</button></li>`);
+        tiles.push(`<li class="prow"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}" title="${sat === undefined ? "" : sat === null ? "1st shift" : sat === 0 ? "back to back" : "sat " + sat + " pts"}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${gN || aN ? `<span class="t-ga">${[gN ? "G" : "", aN ? "A" : ""].filter(Boolean).join("")}</span>` : ""}${sat === 0 ? '<span class="t-b2b" aria-label="back to back">●</span>' : ""}<span class="grow"></span>${s.p === spots.deep ? '<span class="pos dd">DD</span>' : s.p === spots.short ? '<span class="pos sd">SD</span>' : ""}</button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change" title="Handler (H) or cutter (C): tap to switch">${r || "–"}</button></li>`);
       }
     }
     const pl = podsOnLine(line.map(s => s.p));
@@ -605,7 +612,8 @@
     if (!pr) {
       return `<div class="above"><h1 class="page-title">Practice</h1>
           <span class="page-sub">Check people in as they show up. It saves on every tap and shows live on every phone.</span>
-          <div class="two-btns"><button class="btn primary" data-act="pr-new">${todays ? "Open today's check-in" : "Check in today's practice"}</button><button class="btn" data-act="pr-new-date">Add an earlier practice</button></div></div>
+          <button class="btn primary" data-act="pr-new">${todays ? "Open today's check-in" : "Check in today's practice"}</button>
+          <button class="text-link" data-act="pr-new-date">+ Add an earlier practice</button></div>
         ${deep(attSec + listSec)}`;
     }
     const here = new Set((pr.attended || []).filter(id => P(id))), sitting = new Set((pr.sitting || []).filter(id => here.has(id)));
@@ -620,19 +628,20 @@
     const sc = scrimSync(pr);
     const team = (k, name) => { const ps = sortPlayers(sc[k].map(P).filter(Boolean)), tw = ps.filter(p => p.gender === "W").length, tm = ps.filter(p => p.gender === "M").length;
       return `<div class="scrim-team ${k}"><div><b class="tn2">${name}</b><br><small>${ps.length} · ${tw} W · ${tm} M</small></div>${ps.map(p => `<span class="p"><i class="dot ${p.gender || ""}"></i>${esc(label(p))}${p.badge ? " " + p.badge : ""}</span>`).join("")}</div>`; };
-    const scrim = `<div class="row" style="flex-wrap:nowrap"><h2 class="grow">Scrim teams</h2>${sc ? '<button class="btn sm on-deep" data-act="scrim-make">Shuffle</button><button class="btn sm on-deep ghost" data-act="scrim-clear">Hide</button>' : `<button class="btn sm on-deep" data-act="scrim-make" ${here.size - sitting.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}</div>
+    const scrim = sc ? `<div class="row" style="flex-wrap:nowrap"><h2 class="grow">Scrim teams</h2><button class="btn sm on-deep" data-act="scrim-make">Shuffle</button><button class="btn sm on-deep ghost" data-act="scrim-clear">Hide</button></div>
       <span class="muted" style="font-size:15px">Even women and men, captains split, handlers spread out. Late arrivals join the smaller side; anyone not scrimming drops off. Only on this phone.</span>
-      ${sc ? `<div class="scrim-teams">${team("A", "Dark")}${team("B", "Light")}</div>` : ""}`;
+      <div class="scrim-teams">${team("A", "Dark")}${team("B", "Light")}</div>` : "";
     return `<div class="above practice-open">
-        <div class="pr-top"><h1 class="page-title">Practice</h1><input class="date-pill" id="prDate" type="date" value="${esc(pr.practice_date)}" aria-label="Practice date"><span class="grow"></span><button class="btn ghost" data-act="pr-close">Done</button></div>
+        <div class="pr-top"><h1 class="page-title">Practice</h1><span class="grow"></span><button class="btn" data-act="pr-close">Done</button></div>
+        <label class="date-row"><span>Date</span><input class="date-pill" id="prDate" type="date" value="${esc(pr.practice_date)}" aria-label="Practice date"></label>
         <div class="here"><span class="big">${here.size}</span><span class="t"><b>here, saving live</b><span><b class="cw">${w} W</b> · <b class="cm">${m} M</b>${sitting.size ? ` · ${sitting.size} not scrimming` : ""}</span></span></div>
         <div class="seg wide disp" role="group" aria-label="What a tap does"><button data-act="pr-mode" data-v="here" aria-pressed="${!sitMode}">Check in</button><button data-act="pr-mode" data-v="sit" aria-pressed="${sitMode}">Left / not scrimming</button></div>
         ${sitMode ? '<p class="page-sub" style="margin:0">Tap anyone who left early or isn\'t scrimming. They stay checked in (it still counts as a practice) but are left off the scrim teams. Tap again to put them back.</p>' : ""}
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         ${extra.length ? `<section style="display:flex;flex-direction:column;gap:8px"><span class="group-title">Marked out, but checked in</span><div class="chk-grid">${extra.map(chip).join("")}</div></section>` : ""}
-        <div><button class="btn sm danger" data-act="pr-delete">${ui.prConfirm === pr.id ? "Tap again to delete this practice" : "Delete practice"}</button></div>
+        ${sc ? "" : `<button class="btn primary" data-act="scrim-make" ${here.size - sitting.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}
       </div>
-      ${deep(scrim + attSec + listSec)}`;
+      ${deep(scrim + attSec + listSec + `<button class="text-link on-deep${ui.prConfirm === pr.id ? " armed" : ""}" data-act="pr-delete">${ui.prConfirm === pr.id ? "Tap again to delete this practice" : "Delete this practice"}</button>`)}`;
   }
   async function newPractice(date) {
     const ex = practices().find(x => x.practice_date === date);
@@ -675,10 +684,12 @@
   const whenText = d => { const n = daysUntil(d); return n === 0 ? "today" : n === 1 ? "tomorrow" : n > 1 ? `in ${n} days` : n === -1 ? "yesterday" : `${-n} days ago`; };
   // Wins and losses from games with at least one result.
   function tourRecord(t) {
-    let w = 0, l = 0, tie = 0, us = 0, them = 0;
-    S.games.filter(g => g.tournament_id === t.id).forEach(g => { const s = computeStats(gamePoints(g.id)).team; if (!s.played) return; us += s.us; them += s.them; if (s.us > s.them) w++; else if (s.them > s.us) l++; else tie++; });
-    return { w, l, tie, us, them, any: w + l + tie > 0 };
+    // A game with points still to play counts as in progress, not as a win, loss or tie.
+    let w = 0, l = 0, tie = 0, live = 0, us = 0, them = 0;
+    S.games.filter(g => g.tournament_id === t.id).forEach(g => { const lines = gamePoints(g.id), s = computeStats(lines).team; if (!s.played) return; us += s.us; them += s.them; if (nowPoint(lines)) live++; else if (s.us > s.them) w++; else if (s.them > s.us) l++; else tie++; });
+    return { w, l, tie, live, us, them, any: w + l + tie + live > 0 };
   }
+  const recText = r => `${r.w}–${r.l}${r.tie ? "–" + r.tie : ""}`;
   function renderHome() {
     const today = todayISO();
     const dated = tours().filter(t => t.start_date).sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
@@ -693,19 +704,19 @@
         <span class="eyebrow">Next up</span>
         <div class="countdown">${d === 0 ? `<span class="big word">Today</span><span class="to"><span>it's</span><b>${esc(next.name)}</b></span>` : `<span class="big">${d}</span><span class="to"><span>day${d === 1 ? "" : "s"} to</span><b>${esc(next.name)}</b></span>`}</div>
         <span>${fmtDay(next.start_date)}${next.location ? ` · at ${esc(next.location)}` : ""}</span>
-        <div class="two-btns"><button class="btn primary" data-act="home-tour" data-id="${next.id}">${games ? "Open its games" : "Plan the first game"}</button><button class="btn" data-act="home-late" data-id="${next.id}">Who's going · ${goingCount(next).n}</button></div>
+        <div class="two-btns">${games ? `<button class="btn primary" data-act="home-tour" data-id="${next.id}">Open its games</button>` : `<button class="btn primary" data-act="tour-add-game" data-id="${next.id}">Plan the first game</button>`}<button class="btn" data-act="home-late" data-id="${next.id}">Who's going · ${goingCount(next).n}</button></div>
         <span class="page-sub">${att.n ? `${plural(att.n, "practice")} ${sinceText(att)} ${att.n === 1 ? "counts" : "count"} toward who starts.` : `No practices checked in ${sinceText(att)} yet.`}</span>
       </section>`;
     } else hero = `<section class="home-next"><span class="eyebrow">Next up</span><h1 class="page-title">No tournament on the calendar</h1><div class="two-btns"><button class="btn primary" data-act="home-new-tour">Add a tournament</button></div></section>`;
     const nHere = todays ? (todays.attended || []).filter(id => P(id)).length : 0;
     const practiceCard = `<section class="card today-card"><span class="t"><b>Practice today</b><span>${fmtDay(today)} · ${todays ? (nHere ? `${nHere} here` : "nobody in yet") : "not started"}</span></span><button class="pill-btn" data-act="home-practice">${todays ? "Open" : "Check in"}</button></section>`;
     const lr = lastOut ? tourRecord(lastOut) : null;
-    const last = lastOut ? `<button class="last-out" data-act="home-tour" data-id="${lastOut.id}"><span class="eyebrow">Last out</span><b>${esc(lastOut.name)}</b><span>${lr.any ? `${lr.w}–${lr.l} · ${lr.us}–${lr.them} in points` : fmtDay(lastOut.start_date)}</span></button>` : "";
+    const last = lastOut ? `<button class="last-out" data-act="home-tour" data-id="${lastOut.id}"><span class="eyebrow">Last out</span><b>${esc(lastOut.name)}</b><span>${lr.any ? `${recText(lr)} · ${lr.us}–${lr.them} in points` : fmtDay(lastOut.start_date)}</span></button>` : "";
     const row = (t, k) => {
       const past = t.start_date && t.start_date < today, r = tourRecord(t), n = S.games.filter(g => g.tournament_id === t.id).length;
       const [y, mo, d] = (t.start_date || "").split("-").map(Number);
       const mon = y ? new Date(y, mo - 1, d).toLocaleDateString(undefined, { month: "short" }).toUpperCase() : "";
-      const status = r.any ? `<span class="${r.w > r.l ? "won" : r.l > r.w ? "lost" : ""}">${r.w}–${r.l}</span>` : t.start_date ? (past ? (n ? plural(n, "game") : "no games") : whenText(t.start_date)) : "no date";
+      const status = r.any ? `<span class="${r.w > r.l ? "won" : r.l > r.w ? "lost" : ""}">${recText(r)}</span>` : t.start_date ? (past ? (n ? plural(n, "game") : "no games") : whenText(t.start_date)) : "no date";
       return `<button class="sched-row sched-open n${Math.min(k + 1, 3)}" data-act="home-tour" data-id="${t.id}">
           <span class="sched-date">${y ? `<small>${mon}</small><b>${d}</b>` : "<b>–</b>"}</span>
           <span class="sched-name"><b>${esc(t.name)}</b>${t.location ? `<span>at ${esc(t.location)}</span>` : ""}</span>
@@ -763,9 +774,9 @@
     const nextGames = nextT ? S.games.filter(g => g.tournament_id === nextT.id).length : 0;
     return `<div class="above">
         <button class="back-link" data-act="tab" data-tab="home">‹ Home</button>
-        <div class="tour-head"><div style="min-width:0"><h1>${esc(t.name)}</h1><span class="page-sub">${when}${t.location ? ` · at ${esc(t.location)}` : ""}</span>${(c => `<span class="page-sub">${c.n} going · <b class="cw">${c.w} W</b> · <b class="cm">${c.m} M</b>${c.late ? ` · ${c.late} late` : ""}</span>`)(goingCount(t))}</div>
-          ${r.any ? `<div class="rec"><b>${r.w}–${r.l}</b><small>${r.us}–${r.them} in points</small></div>` : ""}</div>
-        <div class="tour-btns"><button class="btn primary" data-act="tour-add-game" data-id="${t.id}">+ Add game</button><button class="btn" data-act="home-late" data-id="${t.id}">Who's going · ${goingCount(t).n}</button>${gs.some(g => computeStats(gamePoints(g.id)).team.played) ? `<button class="btn" data-act="tour-stats" data-id="${t.id}">Stats</button>` : ""}<button class="btn ghost" data-act="home-edit-tour" data-id="${t.id}">Edit</button></div>
+        <div class="tour-head"><div class="th-t"><h1>${esc(t.name)}</h1><span class="page-sub">${when}${t.location ? ` · at ${esc(t.location)}` : ""}</span>${(c => `<span class="page-sub">${c.n} going · <b class="cw">${c.w} W</b> · <b class="cm">${c.m} M</b>${c.late ? ` · ${c.late} late` : ""}</span>`)(goingCount(t))}</div>
+          ${r.any ? `<div class="rec"><b>${recText(r)}</b><small>${r.tie ? "W–L–T · " : ""}${r.live ? `${r.live} in progress · ` : ""}${r.us}–${r.them} in points</small></div>` : ""}</div>
+        <div class="tour-btns"><button class="btn primary" data-act="tour-add-game" data-id="${t.id}">+ Add game</button><button class="btn" data-act="home-late" data-id="${t.id}">Who's going</button><button class="btn" data-act="tour-stats" data-id="${t.id}">Stats</button><button class="btn" data-act="home-edit-tour" data-id="${t.id}">Edit</button></div>
         ${gs.length ? `<span class="eyebrow">Games in play order</span><ul class="tgames">${gs.map(card).join("")}</ul>` : `<div class="tgames-empty"><p><b>No games yet.</b></p><p class="muted">Add the first game to start planning lines. You can add the rest as the schedule comes out.</p></div>`}
       </div>
       ${nextT ? deep(`<span class="eyebrow">Next up ↓</span><button class="next-link" data-act="home-tour" data-id="${nextT.id}"><span class="t"><b>${esc(nextT.name)}</b><span>${fmtDay(nextT.start_date)}${nextGames ? "" : " · no games yet"}</span></span><span class="soon">${whenText(nextT.start_date)} ›</span></button>`) : ""}`;
@@ -807,7 +818,7 @@
   function renderStats() {
     const scope = ui.stats.scope;
     const g = game();
-    const t = tourOf(g), sc = scope === "tour" && !t ? "game" : scope;
+    const t = (ui.stats.tourId && tours().find(x => x.id === ui.stats.tourId)) || tourOf(g), sc = scope === "tour" && !t ? "game" : scope;
     const pts = sc === "game" && g ? gamePoints(g.id) : sc === "tour" ? S.points.filter(x => { const gg = S.games.find(y => y.id === x.game_id); return gg && gg.tournament_id === t.id; }) : S.points.slice();
     const { team, rows } = computeStats(pts);
     const keyMap = { name: r => label(P(r.id)).toLowerCase(), pts: r => r.pts, o: r => r.o, d: r => r.d, g: r => r.g, a: r => r.a };
@@ -836,7 +847,7 @@
           ${t ? `<button data-act="stats-scope" data-v="tour" aria-pressed="${sc === "tour"}">Tournament</button>` : ""}
           <button data-act="stats-scope" data-v="all" aria-pressed="${sc === "all"}">All games</button>
         </div>
-        <span class="page-sub">${what}</span>
+        ${sc === "all" || !g ? `<span class="page-sub">${what}</span>` : `<div class="ctx-row"><button class="ctx-pick" data-act="games" aria-label="Switch game">${sc === "tour" ? `<b>${esc(t.name)}</b>` : `${tourOf(g) ? `<span>${esc(tourOf(g).name)} ›</span> ` : ""}<b>${esc(g.name)}</b>`} <i aria-hidden="true">▾</i></button><span class="page-sub">${what.replace(/^.*? · /, "")}</span></div>`}
         <div class="team-tiles">
           <div><b>${team.us}–${team.them}</b><span>Score</span></div>
           <div><b>${team.holds}/${team.oPts}</b><span>Holds on O</span></div>
@@ -870,12 +881,8 @@
       const ps = list.filter(p => (p.gender || "") === gnd);
       return ps.length ? `<section style="display:flex;flex-direction:column;gap:8px"><span class="group-title">${title} · ${ps.length}</span><div class="ptiles">${ps.map(p => `<button class="ptile${p.active ? "" : " inactive"}" data-act="p-edit" data-id="${p.id}" aria-label="Edit ${esc(label(p))}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${p.active ? "" : '<span class="out">OUT</span>'}<span class="go" aria-hidden="true">›</span></button>`).join("")}</div></section>` : "";
     };
-    const link = location.origin + location.pathname + "?t=" + TOKEN;
-    const settings = `<div class="deep-card abyss settings-card"><h2 style="margin:0">Share the board</h2><span class="muted" style="font-size:15px">Send teammates this link and the passcode separately. Anyone with both can view and edit.</span><div class="mono" id="shareLink">${esc(link)}</div><div class="row"><button class="btn sm on-deep" data-act="copy-link">Copy link</button></div></div>
-      <div class="deep-card abyss settings-card"><h2 style="margin:0">Change passcode</h2><form id="codeForm"><input class="line-in" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn on-deep" type="submit">Change</button></form><span class="muted" style="font-size:14px">Everyone else will be asked for the new one.</span></div>
-      <div class="deep-card abyss settings-card"><h2 style="margin:0">This device</h2><div class="row"><button class="btn sm on-deep" data-act="logout">Forget passcode on this device</button></div></div>`;
     return `<div class="above">
-        <div><h1 class="page-title">Roster</h1><span class="page-sub">${plural(all.length, "player")} · <b class="cw">${nw} W</b> · <b class="cm">${nm} M</b></span></div>
+        <div class="roster-head"><div><h1 class="page-title">Roster</h1><span class="page-sub">${plural(all.length, "player")} · <b class="cw">${nw} W</b> · <b class="cm">${nm} M</b></span></div><button class="btn" data-act="team-settings">Team settings</button></div>
         <form class="add-form" id="addForm">
           <b class="t">Add a player</b>
           <div class="two"><label>Nickname<input class="line-in" id="addNick" value="${esc(ui.addNick || "")}" placeholder="On the board" maxlength="30"></label><label>Full name<input class="line-in" id="addName" value="${esc(ui.addName || "")}" placeholder="Optional" maxlength="60"></label></div>
@@ -883,9 +890,9 @@
         </form>
         <input class="search" id="rosterFilter" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search players" aria-label="Search players" value="${esc(ui.rosterFilter)}">
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
-        <p class="legend-note">Tap a player to change their name, W/M, captain or president badge, mark them out, or remove them.</p>
+        <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + settings)}`;
+      ${deep(renderZone() + renderPods() + privateCard())}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -968,9 +975,7 @@
       const it = (act, txt, hint, cls) => `<button data-act="${act}"${cls ? ` class="${cls}"` : ""}>${txt}${hint ? `<small>${hint}</small>` : ""}</button>`;
       body = `<div class="menu-list">
         ${g ? '<button class="menu-hero" data-act="fill-open">Fill lines automatically</button>' : ""}
-        ${g ? `<div class="menu-group"><span class="eyebrow">This game</span><div class="menu-block">${gamePoints(g.id).length ? it("edit-lines", "Edit lines", "Reorder, or select several to delete") : ""}${t ? it("late-open", "Who's going", (c => `${c.n} going · ${c.w} W · ${c.m} M${c.late ? ` · ${c.late} late` : ""}`)(goingCount(t))) : ""}${it("edit-game", "Edit game", "Name, tournament, date")}${t ? "" : it("copy-game", "New game copying these lines")}</div></div>` : ""}
-        <div class="menu-group"><span class="eyebrow">New</span><div class="menu-block">${t ? it("copy-game", "Next game in this tournament", "Starts with these lines") + it("new-game-tour", "New empty game in " + esc(t.name)) : ""}${it("new-game", "New game")}${it("new-tour", "New tournament")}</div></div>
-        ${t ? `<div class="menu-group"><span class="eyebrow">Tournament</span><div class="menu-block">${it("edit-tour", "Edit " + esc(t.name), "Name, date, where")}${s.confirm === "tour" ? removeChoices(t, "delete-tour", "") : it("delete-tour", "Remove " + esc(t.name), "", "danger")}</div></div>` : ""}
+        ${g ? `<div class="menu-group"><span class="eyebrow">This game</span><div class="menu-block">${gamePoints(g.id).length ? it("edit-lines", "Edit lines", "Reorder, or select several to delete") : ""}${t ? it("late-open", "Who's going", (c => `${c.n} going · ${c.w} W · ${c.m} M${c.late ? ` · ${c.late} late` : ""}`)(goingCount(t))) : ""}${it("edit-game", "Edit game", "Name, tournament, date")}${it("copy-game", t ? "Next game in this tournament" : "New game copying these lines", "Starts with these lines")}</div></div>` : ""}
         ${g ? `<button class="menu-del${s.confirm === "game" ? " armed" : ""}" data-act="delete-game">${s.confirm === "game" ? "Tap again to delete " + esc(g.name) + " and its lines" : "Delete this game · tap twice"}</button>` : ""}
       </div>`;
     } else if (s.type === "game-form") {
@@ -1015,7 +1020,7 @@
           ${ui.owner ? "<li>Your private settings</li>" : ""}
           <li>Players you've placed stay put. Lines with results aren't touched.</li>
         </ul>
-        ${btns(s.n ? (s.n === 1 ? `Fill Line ${nLines + 1}` : `Fill Lines ${nLines + 1}–${nLines + s.n}`) : "Fill empty spots", 'data-act="fill-go"')}
+        <div class="pin">${btns(s.n ? (s.n === 1 ? `Fill Line ${nLines + 1}` : `Fill Lines ${nLines + 1}–${nLines + s.n}`) : "Fill empty spots", 'data-act="fill-go"')}</div>
       </div>`;
     } else if (s.type === "ratio") {
       title = "Men are sitting longer"; sub = "While filling lines";
@@ -1066,7 +1071,7 @@
         <div class="going-total"><b>${c.n} going</b><span><b class="cw">${c.w} W</b> · <b class="cm">${c.m} M</b>${c.late ? ` · ${c.late} late` : ""}${c.away ? ` · ${c.away} not going` : ""}</span></div>
         <p class="note">Everyone starts as going. Tap a name to cycle: going → late sign-up → not going. Lines and Fill lines leave out anyone not going. Late sign-ups go out after everyone else's first shift${ui.lateMode === "less" ? " and get a couple fewer points over the day" : ""}.</p>
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
-        ${btns("Done", 'data-act="close"', false)}</div>` : '<p class="empty-note">That tournament is gone.</p>';
+        <div class="pin">${btns("Done", 'data-act="close"', false)}</div></div>` : '<p class="empty-note">That tournament is gone.</p>';
     } else if (s.type === "pr-date") {
       title = "Add a practice";
       body = `<form class="form" id="prDateForm">
@@ -1093,10 +1098,21 @@
         <label>Full name<input class="line-in" id="pn-${p.id}" data-act="p-name" data-id="${p.id}" value="${esc(p.name)}" maxlength="60"></label>
         <div class="fill-pair"><span>Matching</span><div class="seg inset wide" role="group" aria-label="Matching"><button data-act="pe-g" data-id="${p.id}" data-v="W" aria-pressed="${p.gender === "W"}"><span class="cw">●</span> Women-matching</button><button data-act="pe-g" data-id="${p.id}" data-v="M" aria-pressed="${p.gender === "M"}"><span style="color:var(--m-light)">●</span> Men-matching</button></div></div>
         <div class="fill-pair"><span>Badge</span><div class="seg inset wide" role="group" aria-label="Badge">${[["", "None"], ["C", "Captain"], ["P", "President"]].map(([v, t]) => `<button data-act="pe-badge" data-id="${p.id}" data-v="${v}" aria-pressed="${(p.badge || "") === v}">${t}</button>`).join("")}</div></div>
+        <div class="fill-pair"><span>Zone spots</span><div class="pe-zones">${ZONES.map(([k, name]) => { const z = zoneOf(), v = (z[k] || []).includes(p.id) ? "main" : (z[k + "_ok"] || []).includes(p.id) ? "ok" : "";
+          return `<div class="pe-zone"><b>${name}</b><div class="seg inset" role="group" aria-label="${name}">${[["", "No"], ["main", "Yes"], ["ok", "If needed"]].map(([x, t]) => `<button data-act="pe-zone" data-id="${p.id}" data-z="${k}" data-v="${x}" aria-pressed="${v === x}">${t}</button>`).join("")}</div></div>`; }).join("")}</div></div>
         <div class="fill-pair"><span>Playing</span><div class="seg inset wide" role="group" aria-label="Playing"><button data-act="pe-active" data-id="${p.id}" data-v="1" aria-pressed="${!!p.active}">Active</button><button data-act="pe-active" data-id="${p.id}" data-v="0" aria-pressed="${!p.active}">Out</button></div>
           <p class="fill-pair-note">Out hides them from the player picker and the line maker without deleting their stats.</p></div>
         ${btns("Done", 'data-act="close"', false)}
         <button class="menu-del${s.confirm ? " armed" : ""}" data-act="pe-delete" data-id="${p.id}">${s.confirm ? "Tap again to remove " + esc(label(p)) : "Remove from the roster · tap twice"}</button>
+      </div>`;
+    } else if (s.type === "settings") {
+      const link = location.origin + location.pathname + "?t=" + TOKEN;
+      title = "Team settings";
+      body = `<div class="form">
+        <div class="fill-pair"><span>Share the board</span><p class="fill-pair-note" style="margin:0">Send teammates this link and the passcode separately. Anyone with both can view and edit.</p><div class="mono" id="shareLink">${esc(link)}</div><button class="btn" data-act="copy-link">Copy link</button></div>
+        <div class="fill-pair"><span>Change passcode</span><form id="codeForm" class="row"><input class="line-in grow" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn" type="submit">Change</button></form><p class="fill-pair-note" style="margin:0">Everyone else will be asked for the new one.</p></div>
+        <div class="fill-pair"><span>This device</span><button class="btn" data-act="logout">Forget passcode on this device</button></div>
+        ${btns("Done", 'data-act="close"', false)}
       </div>`;
     } else if (s.type === "pod") {
       const x = podsOf().find(y => y.id === s.id);
@@ -1488,7 +1504,7 @@
     if (a === "close") { closeSheet(); return; }
     if (a === "tab") { ui.tab = el.dataset.tab; store.set("tab", ui.tab); render(); window.scrollTo(0, 0); return; }
     if (a === "game-menu") { openSheet({ type: "game-menu" }); return; }
-    if (a === "new-game") { openSheet({ type: "game-form", tour: "" }); return; }
+    if (a === "new-game") { openSheet({ type: "game-form", tour: tourOf(game())?.id || "" }); return; }
     if (a === "new-game-tour") { openSheet({ type: "game-form", tour: game()?.tournament_id || "" }); return; }
     if (a === "new-tour") { openSheet({ type: "tour-form" }); return; }
     if (a === "edit-tour") { openSheet({ type: "tour-form", id: game()?.tournament_id }); return; }
@@ -1509,7 +1525,7 @@
     if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
     if (a === "go-line") { const cur = (ui.swipe && ui.swipe.i) || 0; showLine(el.dataset.dir ? cur + +el.dataset.dir : +el.dataset.i); if (!el.dataset.dir) window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (a === "games") { openSheet({ type: "games" }); return; }
-    if (a === "pick-game") { closeSheet(); ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = id; store.set("game", id); render(); window.scrollTo(0, 0); return; }
+    if (a === "pick-game") { closeSheet(); ui.stats.tourId = null; store.del("statsTour"); ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = id; store.set("game", id); render(); window.scrollTo(0, 0); return; }
     if (a === "pt-open") { const k = id + ":" + el.dataset.k; ui.openPt = ui.openPt === k ? null : k; render(); return; }
     if (a === "jump-now") { jumpNow(); return; }
     if (a === "result") {
@@ -1532,7 +1548,7 @@
     if (a === "set-goal") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = v; if (o.assist === v) o.assist = null; }); return; }
     if (a === "set-assist") { const done = watchFinish(id), k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); done(); return; }
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
-    if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k; openSheet({ type: "pick", pointId: id, k, current: pt?.lineup?.[k]?.p || null }); return; }
+    if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k, cur = pt?.lineup?.[k]?.p || null; openSheet({ type: "pick", pointId: id, k, current: cur, f: (cur && P(cur)?.gender) || "" }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
     if (a === "edit-lines") { closeSheet(); ui.editLines = { sel: new Set(), confirm: false }; ui.undoDel = null; render(); window.scrollTo(0, 0); return; }
     if (a === "edit-done") { ui.editLines = null; render(); setTimeout(checkVersion, 300); return; }
@@ -1568,7 +1584,7 @@
     }
     if (a === "home-tour") { openTour(id); return; }
     if (a === "tour-add-game") { openSheet({ type: "game-form", tour: id }); return; }
-    if (a === "tour-stats") { const gs = S.games.filter(g => g.tournament_id === id); if (gs.length) { ui.gameId = gs[gs.length - 1].id; store.set("game", ui.gameId); } ui.stats.scope = "tour"; ui.tab = "stats"; store.set("tab", "stats"); render(); window.scrollTo(0, 0); return; }
+    if (a === "tour-stats") { ui.stats.scope = "tour"; ui.stats.tourId = id; store.set("statsScope", "tour"); store.set("statsTour", id); ui.tab = "stats"; store.set("tab", "stats"); render(); window.scrollTo(0, 0); return; }
     if (a === "home-game") { openGame(id); return; }
     if (a === "home-late") { openSheet({ type: "late", tid: id }); return; }
     if (a === "home-edit-tour") { openSheet({ type: "tour-form", id }); return; }
@@ -1659,10 +1675,12 @@
     if (a === "bucket") { ui.openBucket = ui.openBucket === el.dataset.k ? null : el.dataset.k; render(); return; }
     if (a === "zone-add") { openSheet({ type: "pick", zone: el.dataset.z }); return; }
     if (a === "zone-remove") { const z = el.dataset.z, i = +el.dataset.i; saveZone(n => { n[z].splice(i, 1); }); return; }
-    if (a === "stats-scope") { ui.stats.scope = el.dataset.v; render(); return; }
+    if (a === "stats-scope") { ui.stats.scope = el.dataset.v; ui.stats.tourId = null; store.set("statsScope", ui.stats.scope); store.del("statsTour"); render(); return; }
     if (a === "sort") { ui.stats.sort = el.dataset.k; render(); return; }
     if (a === "add-g") { ui.addG = el.dataset.v; render(); return; }
     if (a === "p-edit") { openSheet({ type: "player", id }); return; }
+    if (a === "pe-zone") { const k = el.dataset.z, v = el.dataset.v; saveZone(n => { n[k] = n[k].filter(x => x !== id); n[k + "_ok"] = n[k + "_ok"].filter(x => x !== id); if (v === "main") n[k].push(id); if (v === "ok") n[k + "_ok"].push(id); }); return; }
+    if (a === "team-settings") { openSheet({ type: "settings" }); return; }
     if (a === "pe-g") { const p = P(id); if (p && p.gender !== el.dataset.v) savePlayer({ ...p, gender: el.dataset.v }); return; }
     if (a === "pe-badge") { const p = P(id); if (p && (p.badge || "") !== el.dataset.v) savePlayer({ ...p, badge: el.dataset.v }); return; }
     if (a === "pe-active") { const p = P(id), v = el.dataset.v === "1"; if (p && !!p.active !== v) savePlayer({ ...p, active: v }); return; }

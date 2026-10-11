@@ -7,6 +7,17 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 **Real board and test board**
 - **Fixed: deleting several lines makes them all disappear at once,** instead of one by one. Undo brings them all back at once too, and so does undoing Fill lines.
 
+**Test board: easier to get around**
+- **The game menu (⋯) sits next to the game name** on Points, instead of in the header. It only has this game's things now: Fill lines, Edit lines, Who's going, Edit game, Next game in this tournament, Delete. Tournament edit and remove live on the tournament's page.
+- **Switch games from Stats too.** Stats has a "Stress Open › vs Bravo ▾" button. The tournament page's Stats button shows that tournament without changing which game you're on.
+- **New game starts in the tournament you're in.** "Plan the first game" on Home opens the new-game form right away.
+- **Planning looks different from playing.** A game on a later day with nothing played shows "Planning · in 21 days" instead of a 0–0 score, NOW and the result buttons, with Fill lines up front. On the day of the game it switches to the normal view.
+- **Tournament page.** The record leaves out a game still in progress (and shows ties as W–L–T). Stats is always there, and the buttons fit on a phone.
+- **Practice** no longer scrolls sideways on a phone. The date has its own row, "Split into 2 teams" is up top, and "Delete this practice" moved to the bottom.
+- **Bigger tap targets** for the tournament link, the game name and the H/C chips. Swapping a player opens on the same matching (W or M), and "Take X off this line" is a quieter link.
+- **Roster:** set a player's zone spots from their panel. Share link, passcode and "forget this device" moved to a "Team settings" button.
+- The Fill lines and Who's going buttons stay at the bottom of the panel while you scroll. Phones show "Offline" in words when the board can't save.
+
 **Test board**
 - **Who's going, per tournament.** Each tournament has one "Who's going" list, on its page, on Home and in the game menu. It replaces the separate late sign-ups list. Everyone on the roster starts as going. Tap a name to cycle going → late sign-up → not going. It shows how many are going, with women/men and late counts.
 - **Not going means left out of that tournament.** Fill lines, points per person and "Not on yet" skip them. The player picker lists them last under "Not going to this tournament", so you can still put someone in if they show up. The Roster tab is still the whole team.
