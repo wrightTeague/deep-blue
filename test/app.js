@@ -768,7 +768,8 @@
 
   // ---------- pods: groups of players sent out together ----------
   // Stored on the team as [{ id, name, ids: [player ids] }].
-  const podsOf = () => (S.team && Array.isArray(S.team.pods) ? S.team.pods : []);
+  const PODS_ON = true; // the real board hides pods for now
+  const podsOf = () => (PODS_ON && S.team && Array.isArray(S.team.pods) ? S.team.pods : []);
   function savePods(fn) {
     const next = JSON.parse(JSON.stringify(podsOf())); fn(next);
     save("app_save_team_pods", { p: next }, () => { S.team.pods = next; });
@@ -780,6 +781,7 @@
   // Pods whose whole group is on a line.
   const podsOnLine = ids => { const on = new Set(ids); return podsOf().filter(x => x.ids.length && x.ids.every(id => on.has(id))); };
   function renderPods() {
+    if (!PODS_ON) return "";
     const inPods = new Map(); podsOf().forEach(x => x.ids.forEach(id => inPods.set(id, (inPods.get(id) || 0) + 1)));
     const cards = podsOf().map(x => {
       const c = podCounts(x.ids);

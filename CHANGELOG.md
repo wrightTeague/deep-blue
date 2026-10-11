@@ -2,6 +2,15 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 10, 2026
+
+**Real board**
+- **New look ("Waterline").** The real board now has the redesign from the test board: new fonts, a navy tab bar along the bottom on phones, and each page split at a wave. What you act on sits above the water; history, lists and settings sit below it.
+- **Points** shows one line at a time on a phone, with "Up next", earlier lines and points per person below the wave. Tap the game name to switch games. On a laptop, the played, current and next lines sit side by side, with planned lines below the water.
+- **Tournament pages.** Tapping a tournament on Home opens its own page with its date, where, record and games in order. Tap a game to open its lines. A tournament with no games yet shows its page with "+ Add game". On a game, the tournament name takes you back to its page.
+- **Roster** shows players as tiles. Tap one to change their name, W/M, badge, mark them out, or remove them. Adding a player asks for the nickname first.
+- **Stats, pop-ups and the passcode screen** use the new look too.
+
 ## Oct 9, 2026
 
 **Test board**
