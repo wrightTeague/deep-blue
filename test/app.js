@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.24"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.25"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -1173,7 +1173,7 @@
   async function undoAuto() {
     const u = ui.auto; if (!u) return; ui.auto = null;
     for (const c of u.changed) { const cur = S.points.find(p => p.id === c.id); if (cur) await savePoint({ ...cur, lineup: c.lineup }); }
-    for (const id of u.created) await save("app_delete_point", { p_id: id }, () => removeLocal("points", id));
+    await Promise.all(u.created.map(id => save("app_delete_point", { p_id: id }, () => removeLocal("points", id))));
     const g = game(); if (g && u.created.length) { const order = gamePoints(g.id).map(x => x.id); await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { S.points.find(p => p.id === x).pos = i + 1; })); }
     render(); toast("Undone");
   }
@@ -1291,14 +1291,14 @@
     const rows = before.filter(pt => ids.includes(pt.id)).map(pt => JSON.parse(JSON.stringify(pt)));
     ui.undoDel = { gid: g.id, rows, order: before.map(pt => pt.id), text: `Deleted ${ids.length} line${ids.length === 1 ? "" : "s"}.` };
     ui.editLines = null; ui.swipe = null;
-    for (const id of ids) await save("app_delete_point", { p_id: id }, () => removeLocal("points", id));
+    await Promise.all(ids.map(id => save("app_delete_point", { p_id: id }, () => removeLocal("points", id))));   // all at once, not one by one
     const order = gamePoints(g.id).map(x => x.id);
     await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
     render();
   }
   async function undoDelete() {
     const u = ui.undoDel; if (!u) return; ui.undoDel = null;
-    for (const row of u.rows) await savePoint(row);
+    await Promise.all(u.rows.map(row => savePoint(row)));
     const order = u.order.filter(id => S.points.some(p => p.id === id));
     await save("app_reorder_points", { p_game: u.gid, p_ids: order }, () => order.forEach((x, i) => { const p = S.points.find(q => q.id === x); if (p) p.pos = i + 1; }));
     render(); toast("Lines are back");

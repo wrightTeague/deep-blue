@@ -4,6 +4,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Oct 11, 2026
 
+**Real board and test board**
+- **Fixed: deleting several lines makes them all disappear at once,** instead of one by one. Undo brings them all back at once too, and so does undoing Fill lines.
+
 **Test board**
 - **Who's going, per tournament.** Each tournament has one "Who's going" list, on its page, on Home and in the game menu. It replaces the separate late sign-ups list. Everyone on the roster starts as going. Tap a name to cycle going → late sign-up → not going. It shows how many are going, with women/men and late counts.
 - **Not going means left out of that tournament.** Fill lines, points per person and "Not on yet" skip them. The player picker lists them last under "Not going to this tournament", so you can still put someone in if they show up. The Roster tab is still the whole team.
