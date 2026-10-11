@@ -629,3 +629,12 @@ table.stats td.z{color:var(--faint)}
 .pr-top .page-title{flex:none}
 .date-pill{min-width:0;flex:0 1 auto}
 .seg.wide.disp button{font-size:16px;white-space:normal;line-height:1.1}
+/* who's going sheet */
+.going-total{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:16px}
+.going-total > b{font-family:var(--display);font-weight:800;font-size:26px}
+.pchip small{font-size:12px;font-weight:700;margin-left:4px;padding:1px 6px;border-radius:999px}
+.pchip.going-late{border-color:var(--sun);background:#fff8e1}
+.pchip.going-late small{background:var(--sun);color:var(--ink)}
+.pchip.going-away{border-style:dashed;background:transparent;color:var(--muted)}
+.pchip.going-away > i{opacity:.4}
+.pchip.going-away small{background:var(--line);color:var(--muted)}
