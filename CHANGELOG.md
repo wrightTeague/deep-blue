@@ -7,6 +7,10 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 **Real board and test board**
 - **Fixed: deleting several lines makes them all disappear at once,** instead of one by one. Undo brings them all back at once too, and so does undoing Fill lines.
 
+**Test board: add a player from check-in or Who's going**
+- **"+ New player" at practice check-in and in Who's going.** Type their name and pick W or M. They join the team and are checked in, or marked going. In Who's going you can also mark them as a late sign-up.
+- **Catches duplicates.** As you type, names already on the team that look similar show up ("Sammy" → Sam G, Sam M). Tap one to use them instead. An exact repeat of a name on the team isn't added.
+
 **Test board: easier to get around**
 - **The game menu (⋯) sits next to the game name** on Points, instead of in the header. It only has this game's things now: Fill lines, Edit lines, Who's going, Edit game, Next game in this tournament, Delete. Tournament edit and remove live on the tournament's page.
 - **Switch games from Stats too.** Stats has a "Stress Open › vs Bravo ▾" button. The tournament page's Stats button shows that tournament without changing which game you're on.

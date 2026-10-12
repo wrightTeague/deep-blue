@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.26"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.27"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -638,6 +638,7 @@
         <div class="seg wide disp" role="group" aria-label="What a tap does"><button data-act="pr-mode" data-v="here" aria-pressed="${!sitMode}">Check in</button><button data-act="pr-mode" data-v="sit" aria-pressed="${sitMode}">Left / not scrimming</button></div>
         ${sitMode ? '<p class="page-sub" style="margin:0">Tap anyone who left early or isn\'t scrimming. They stay checked in (it still counts as a practice) but are left off the scrim teams. Tap again to put them back.</p>' : ""}
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
+        <button class="add-light" data-act="np-open" data-c="practice">+ New player</button>
         ${extra.length ? `<section style="display:flex;flex-direction:column;gap:8px"><span class="group-title">Marked out, but checked in</span><div class="chk-grid">${extra.map(chip).join("")}</div></section>` : ""}
         ${sc ? "" : `<button class="btn primary" data-act="scrim-make" ${here.size - sitting.size < 2 ? "disabled" : ""}>Split into 2 teams</button>`}
       </div>
@@ -667,15 +668,35 @@
     const v = await save("app_practice_sit_mark", { p_id: pid, p_player: player, p_on: on }, () => { pr.sitting = on ? [...cur, player] : cur.filter(id => id !== player); });
     if (Array.isArray(v)) { const x = (S.practices || []).find(y => y.id === pid); if (x) { x.sitting = v; render(); } }
   }
-  async function markLate(tid, player) {
+  async function setGoing(tid, player, next) {
     const t = tours().find(x => x.id === tid); if (!t) return;
     const late = Array.isArray(t.late) ? t.late : [], away = Array.isArray(t.away) ? t.away : [];
-    const cur = away.includes(player) ? "away" : late.includes(player) ? "late" : "going", next = { going: "late", late: "away", away: "going" }[cur];
     const v = await save("app_tournament_going_mark", { p_id: tid, p_player: player, p_state: next }, () => {
       t.late = late.filter(id => id !== player).concat(next === "late" ? [player] : []);
       t.away = away.filter(id => id !== player).concat(next === "away" ? [player] : []);
     });
     if (v && Array.isArray(v.late)) { const x = tours().find(y => y.id === tid); if (x) { x.late = v.late; x.away = v.away || []; render(); } }
+  }
+  function markLate(tid, player) {
+    const t = tours().find(x => x.id === tid); if (!t) return;
+    const cur = (t.away || []).includes(player) ? "away" : (t.late || []).includes(player) ? "late" : "going";
+    return setGoing(tid, player, { going: "late", late: "away", away: "going" }[cur]);
+  }
+  // A new player added from practice check-in or a tournament's Who's going list joins the team
+  // and is checked in (or marked going) in one step.
+  async function addPlayerFrom(s, name, gender, late) {
+    const p = { id: uid(), name, nick: name, gender, active: true, created_at: new Date().toISOString() };
+    const ok = await savePlayer(p);
+    if (ok === null) return;
+    if (s.c === "practice") { const pr = (S.practices || []).find(x => x.id === s.pid); if (pr && !(pr.attended || []).includes(p.id)) await markPractice(s.pid, p.id); }
+    else if (s.c === "going" && late) await setGoing(s.tid, p.id, "late");
+    toast(`Added ${name}${s.c === "practice" ? " and checked them in" : late ? " as a late sign-up" : ""}`);
+  }
+  function useExisting(s, id) {
+    const p = P(id); if (!p) return;
+    if (!p.active) savePlayer({ ...p, active: true });
+    if (s.c === "practice") { const pr = (S.practices || []).find(x => x.id === s.pid); if (pr && !(pr.attended || []).includes(id)) markPractice(s.pid, id); toast(label(p) + " checked in"); }
+    else { const t = tours().find(x => x.id === s.tid); if (t && (t.away || []).includes(id)) setGoing(s.tid, id, "going"); toast(label(p) + " is going"); }
   }
 
   // ---------- home: what's next, the season's tournaments, recent games ----------
@@ -1071,7 +1092,20 @@
         <div class="going-total"><b>${c.n} going</b><span><b class="cw">${c.w} W</b> · <b class="cm">${c.m} M</b>${c.late ? ` · ${c.late} late` : ""}${c.away ? ` · ${c.away} not going` : ""}</span></div>
         <p class="note">Everyone starts as going. Tap a name to cycle: going → late sign-up → not going. Lines and Fill lines leave out anyone not going. Late sign-ups go out after everyone else's first shift${ui.lateMode === "less" ? " and get a couple fewer points over the day" : ""}.</p>
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
+        <button class="add-light" data-act="np-open" data-c="going">+ New player</button>
         <div class="pin">${btns("Done", 'data-act="close"', false)}</div></div>` : '<p class="empty-note">That tournament is gone.</p>';
+    } else if (s.type === "newp") {
+      title = "New player"; sub = s.c === "practice" ? "Adds them to the team and checks them in" : "Adds them to the team and marks them going";
+      const q = (s.q || "").trim().toLowerCase();
+      const near = q.length < 2 ? [] : sortPlayers(S.players).filter(p => { const a = (p.nick || "").toLowerCase(), b = p.name.toLowerCase(); return a.includes(q) || b.includes(q) || (a.length >= 3 && q.includes(a)) || b.split(" ").some(w => w && q.startsWith(w.slice(0, 3)) && w.length >= 3); }).slice(0, 4);
+      body = `<form class="form" id="npForm">
+        <label>Name (shown on the board)<input class="line-in" id="npName" value="${esc(s.q || "")}" maxlength="30" autocomplete="off" autofocus></label>
+        ${near.length ? `<div class="np-near"><span class="group-title">Already on the team?</span>${near.map(p => `<button type="button" class="pchip" data-act="np-use" data-p="${p.id}"><i class="dot ${p.gender || ""}"></i>${esc(label(p))}${p.active ? "" : " <small>out</small>"}</button>`).join("")}</div>` : ""}
+        <div class="seg inset wide" role="group" aria-label="Matching"><button type="button" data-act="np-g" data-v="W" aria-pressed="${s.g === "W"}"><span class="cw">●</span> Women-matching</button><button type="button" data-act="np-g" data-v="M" aria-pressed="${s.g !== "W"}"><span style="color:var(--m-light)">●</span> Men-matching</button></div>
+        ${s.c === "going" ? `<label class="fill-check"><input type="checkbox" id="npLate" ${s.late ? "checked" : ""}><span><b>Late sign-up</b><small>They go out after everyone else's first shift.</small></span></label>` : ""}
+        ${btns(s.c === "practice" ? "Add and check in" : "Add to the team", 'type="submit"', false)}
+        <button type="button" class="text-link" data-act="np-back">Cancel</button>
+      </form>`;
     } else if (s.type === "pr-date") {
       title = "Add a practice";
       body = `<form class="form" id="prDateForm">
@@ -1679,6 +1713,10 @@
     if (a === "sort") { ui.stats.sort = el.dataset.k; render(); return; }
     if (a === "add-g") { ui.addG = el.dataset.v; render(); return; }
     if (a === "p-edit") { openSheet({ type: "player", id }); return; }
+    if (a === "np-open") { const c = el.dataset.c; openSheet(c === "practice" ? { type: "newp", c, pid: ui.practiceId, g: ui.addG || "M" } : { type: "newp", c, tid: ui.sheet && ui.sheet.tid, g: ui.addG || "M" }); return; }
+    if (a === "np-g") { ui.sheet.g = el.dataset.v; ui.sheet.late = !!$("#npLate")?.checked; renderSheet(); return; }
+    if (a === "np-back") { const s = ui.sheet; if (s.c === "going") openSheet({ type: "late", tid: s.tid }); else closeSheet(); return; }
+    if (a === "np-use") { const s = ui.sheet; useExisting(s, el.dataset.p); if (s.c === "going") openSheet({ type: "late", tid: s.tid }); else closeSheet(); return; }
     if (a === "pe-zone") { const k = el.dataset.z, v = el.dataset.v; saveZone(n => { n[k] = n[k].filter(x => x !== id); n[k + "_ok"] = n[k + "_ok"].filter(x => x !== id); if (v === "main") n[k].push(id); if (v === "ok") n[k + "_ok"].push(id); }); return; }
     if (a === "team-settings") { openSheet({ type: "settings" }); return; }
     if (a === "pe-g") { const p = P(id); if (p && p.gender !== el.dataset.v) savePlayer({ ...p, gender: el.dataset.v }); return; }
@@ -1715,6 +1753,7 @@
   });
 
   document.addEventListener("input", e => {
+    if (e.target.id === "npName") { ui.sheet.q = e.target.value; ui.sheet.late = !!$("#npLate")?.checked; const pos = e.target.selectionStart; renderSheet(); const q = $("#npName"); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (er) {} } return; }
     if (e.target.id === "pickQ") { ui.sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const q = $("#pickQ"); q.focus(); try { q.setSelectionRange(pos, pos); } catch (er) {} }
     if (e.target.id === "rosterFilter") { ui.rosterFilter = e.target.value; render(); }
     // Keep a half-typed new player across redraws (tapping W/M, or a change from another phone).
@@ -1733,6 +1772,14 @@
   document.addEventListener("submit", e => {
     e.preventDefault();
     const f = e.target;
+    if (f.id === "npForm") {
+      const s = ui.sheet, name = $("#npName").value.trim().replace(/\s+/g, " "), late = !!$("#npLate")?.checked;
+      if (!name) { toast("Type their name first"); $("#npName")?.focus(); return; }
+      if (S.players.some(p => p.name.toLowerCase() === name.toLowerCase() || (p.nick || "").toLowerCase() === name.toLowerCase())) { toast(name + " is already on the team. Tap them above."); return; }
+      if (s.c === "going") openSheet({ type: "late", tid: s.tid }); else closeSheet();
+      addPlayerFrom(s, name, s.g === "W" ? "W" : "M", late);
+      return;
+    }
     if (f.id === "addForm") {
       const full = $("#addName").value.trim().replace(/\s+/g, " "), nickIn = $("#addNick").value.trim().replace(/\s+/g, " ");
       if (!full && !nickIn) { toast("Type a nickname or a name first"); $("#addNick")?.focus(); return; }

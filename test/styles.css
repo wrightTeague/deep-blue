@@ -674,3 +674,7 @@ table.stats td.z{color:var(--faint)}
 .sheet .mono{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--bg);border-radius:10px;padding:10px 12px;overflow-wrap:anywhere}
 .tour-head .rec small{white-space:normal;text-align:right;max-width:150px}
 .tour-head .th-t{flex:1 1 auto}
+.add-light{width:100%;min-height:48px;border:2px dashed var(--line);border-radius:14px;background:transparent;color:var(--teal);font-weight:800;font-size:16px}
+.np-near{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.np-near .group-title{width:100%}
+.np-near small{color:var(--muted);font-weight:600}
