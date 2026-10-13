@@ -4,6 +4,18 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Oct 13, 2026
 
+**Real board**
+- **Everything from the test board since Oct 10 is on the real board** (pods stay test-only):
+  - **Who's going** for each tournament (going, late or not going). It replaces late sign-ups.
+  - **"+ New player"** at practice check-in and in Who's going.
+  - **A slimmer game menu (⋯)** next to the game name, with only this game's actions. New tournaments are added from Home, and tournaments are edited from their own page.
+  - **A game switcher on Stats**, plus a planning look for games on a later day.
+  - **The tournament page** has fixes, Practice is laid out better, buttons are easier to tap, and zone spots can be set from a player's panel.
+- **Typing in a form isn't wiped out anymore** when another phone's change comes in while it's open.
+
+**Test board**
+- Same fix: typing in a form isn't wiped out when another phone's change comes in.
+
 **Real board and test board**
 - **Fixed: the red and blue dots in Attendance are no longer cut off** on the left.
 - **Roster is shorter:** the share-the-board link and passcode boxes are gone. "Forget passcode on this device" is a small link at the bottom.

@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.29"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.30"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -922,7 +922,18 @@
 
   function renderSheet() {
     const root = $("#sheet-root"), s = ui.sheet;
-    if (!s) { root.innerHTML = ""; return; }
+    if (!s) { root.innerHTML = ""; root.dataset.key = ""; return; }
+    const key = JSON.stringify([s.type, s.id, s.tid, s.pid, s.pointId, s.k, s.c, s.zone, s.pod]);
+    let keep = null;
+    if (root.dataset.key === key) {
+      const vals = {};
+      root.querySelectorAll("input[id], textarea[id], select[id]").forEach(el => {
+        if (el.type === "checkbox") { if (el.checked !== el.defaultChecked) vals[el.id] = el.checked; }
+        else if (el.tagName === "SELECT") { const d = [...el.options].find(o => o.defaultSelected); if (el.value !== (d ? d.value : el.options[0]?.value)) vals[el.id] = el.value; }
+        else if (el.value !== el.defaultValue) vals[el.id] = el.value;
+      });
+      keep = { vals, top: root.querySelector(".sheet-body")?.scrollTop || 0 };
+    }
     let title = "", sub = "", tools = "", body = "";
     const btns = (main, mainAttr, cancel) => `<div class="sheet-btns"><button class="btn primary" ${mainAttr}>${main}</button>${cancel === false ? "" : `<button class="btn" type="button" data-act="close">${cancel || "Cancel"}</button>`}</div>`;
     if (s.type === "pick") {
@@ -1154,6 +1165,13 @@
       <div class="sheet-head"><div class="t"><h3>${title}</h3>${sub ? `<span class="sub">${sub}</span>` : ""}</div><button class="close-btn" data-act="close" aria-label="Close">×</button></div>
       ${tools ? `<div class="sheet-tools">${tools}</div>` : ""}
       <div class="sheet-body">${body}</div></div></div>`;
+    // Redrawing the same sheet (a save, a live update from another phone) keeps what's been typed
+    // and where it's scrolled to.
+    if (keep) {
+      Object.entries(keep.vals).forEach(([id, v]) => { const el = document.getElementById(id); if (!el || !root.contains(el)) return; if (el.type === "checkbox") el.checked = v; else el.value = v; });
+      const b = root.querySelector(".sheet-body"); if (b) b.scrollTop = keep.top;
+    }
+    root.dataset.key = key;
   }
 
 
