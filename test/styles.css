@@ -678,3 +678,5 @@ table.stats td.z{color:var(--faint)}
 .np-near{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .np-near .group-title{width:100%}
 .np-near small{color:var(--muted);font-weight:600}
+.two-btns .btn{min-width:0;white-space:normal;line-height:1.15}
+@media (max-width:420px){ .two-btns .btn{font-size:16px;padding:0 8px} }

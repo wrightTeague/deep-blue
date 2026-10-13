@@ -629,3 +629,5 @@ table.stats td.z{color:var(--faint)}
 .pr-top .page-title{flex:none}
 .date-pill{min-width:0;flex:0 1 auto}
 .seg.wide.disp button{font-size:16px;white-space:normal;line-height:1.1}
+.two-btns .btn{min-width:0;white-space:normal;line-height:1.15}
+@media (max-width:420px){ .two-btns .btn{font-size:16px;padding:0 8px} }

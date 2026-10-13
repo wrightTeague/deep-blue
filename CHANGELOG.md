@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 13, 2026
+
+**Real board and test board**
+- **Fixed: the Practice tab no longer slides sideways on phones.** The "Check in today's practice" and "Add an earlier practice" buttons are smaller and wrap onto two lines so they fit.
+
 ## Oct 11, 2026
 
 **Real board and test board**
