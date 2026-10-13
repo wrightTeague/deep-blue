@@ -5,6 +5,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 13, 2026
 
 **Real board and test board**
+- **Fixed: the red and blue dots in Attendance are no longer cut off** on the left.
+- **Roster is shorter:** the share-the-board link and passcode boxes are gone. "Forget passcode on this device" is a small link at the bottom.
 - **Fixed: the Practice tab no longer slides sideways on phones.** The "Check in today's practice" and "Add an earlier practice" buttons are smaller and wrap onto two lines so they fit.
 
 ## Oct 11, 2026

@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.13.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.13.2"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -860,10 +860,6 @@
       const ps = list.filter(p => (p.gender || "") === gnd);
       return ps.length ? `<section style="display:flex;flex-direction:column;gap:8px"><span class="group-title">${title} · ${ps.length}</span><div class="ptiles">${ps.map(p => `<button class="ptile${p.active ? "" : " inactive"}" data-act="p-edit" data-id="${p.id}" aria-label="Edit ${esc(label(p))}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${p.active ? "" : '<span class="out">OUT</span>'}<span class="go" aria-hidden="true">›</span></button>`).join("")}</div></section>` : "";
     };
-    const link = location.origin + location.pathname + "?t=" + TOKEN;
-    const settings = `<div class="deep-card abyss settings-card"><h2 style="margin:0">Share the board</h2><span class="muted" style="font-size:15px">Send teammates this link and the passcode separately. Anyone with both can view and edit.</span><div class="mono" id="shareLink">${esc(link)}</div><div class="row"><button class="btn sm on-deep" data-act="copy-link">Copy link</button></div></div>
-      <div class="deep-card abyss settings-card"><h2 style="margin:0">Change passcode</h2><form id="codeForm"><input class="line-in" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn on-deep" type="submit">Change</button></form><span class="muted" style="font-size:14px">Everyone else will be asked for the new one.</span></div>
-      <div class="deep-card abyss settings-card"><h2 style="margin:0">This device</h2><div class="row"><button class="btn sm on-deep" data-act="logout">Forget passcode on this device</button></div></div>`;
     return `<div class="above">
         <div><h1 class="page-title">Roster</h1><span class="page-sub">${plural(all.length, "player")} · <b class="cw">${nw} W</b> · <b class="cm">${nm} M</b></span></div>
         <form class="add-form" id="addForm">
@@ -875,7 +871,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, captain or president badge, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + settings)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1231,6 +1227,8 @@
       <div class="tchips">${people.map(p => `<button class="tchip" data-act="o-rookie" data-id="${p.id}" aria-pressed="${rk.has(p.id)}">${esc(label(p))}</button>`).join("")}</div>
       <h4>Keep apart</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then everyone they shouldn't share a line with. Never broken.</p><div class="pairs">${groups("apart")}</div>
       <h4>Keep together</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then who should come with them. They come along when they fit.</p><div class="pairs">${groups("together")}</div>
+      <h4>Team passcode</h4><p class="muted" style="margin:0;font-size:14px">Change the passcode everyone uses to open the board. Everyone else will be asked for the new one.</p>
+      <form id="codeForm" class="row" style="gap:6px"><input class="line-in grow" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn sm on-deep" type="submit">Change</button></form>
     </section>`;
   }
 

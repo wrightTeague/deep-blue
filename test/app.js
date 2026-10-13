@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.28"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.29"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -903,7 +903,7 @@
       return ps.length ? `<section style="display:flex;flex-direction:column;gap:8px"><span class="group-title">${title} · ${ps.length}</span><div class="ptiles">${ps.map(p => `<button class="ptile${p.active ? "" : " inactive"}" data-act="p-edit" data-id="${p.id}" aria-label="Edit ${esc(label(p))}"><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${p.active ? "" : '<span class="out">OUT</span>'}<span class="go" aria-hidden="true">›</span></button>`).join("")}</div></section>` : "";
     };
     return `<div class="above">
-        <div class="roster-head"><div><h1 class="page-title">Roster</h1><span class="page-sub">${plural(all.length, "player")} · <b class="cw">${nw} W</b> · <b class="cm">${nm} M</b></span></div><button class="btn" data-act="team-settings">Team settings</button></div>
+        <div class="roster-head"><div><h1 class="page-title">Roster</h1><span class="page-sub">${plural(all.length, "player")} · <b class="cw">${nw} W</b> · <b class="cm">${nm} M</b></span></div></div>
         <form class="add-form" id="addForm">
           <b class="t">Add a player</b>
           <div class="two"><label>Nickname<input class="line-in" id="addNick" value="${esc(ui.addNick || "")}" placeholder="On the board" maxlength="30"></label><label>Full name<input class="line-in" id="addName" value="${esc(ui.addName || "")}" placeholder="Optional" maxlength="60"></label></div>
@@ -913,7 +913,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard())}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1139,15 +1139,6 @@
         ${btns("Done", 'data-act="close"', false)}
         <button class="menu-del${s.confirm ? " armed" : ""}" data-act="pe-delete" data-id="${p.id}">${s.confirm ? "Tap again to remove " + esc(label(p)) : "Remove from the roster · tap twice"}</button>
       </div>`;
-    } else if (s.type === "settings") {
-      const link = location.origin + location.pathname + "?t=" + TOKEN;
-      title = "Team settings";
-      body = `<div class="form">
-        <div class="fill-pair"><span>Share the board</span><p class="fill-pair-note" style="margin:0">Send teammates this link and the passcode separately. Anyone with both can view and edit.</p><div class="mono" id="shareLink">${esc(link)}</div><button class="btn" data-act="copy-link">Copy link</button></div>
-        <div class="fill-pair"><span>Change passcode</span><form id="codeForm" class="row"><input class="line-in grow" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn" type="submit">Change</button></form><p class="fill-pair-note" style="margin:0">Everyone else will be asked for the new one.</p></div>
-        <div class="fill-pair"><span>This device</span><button class="btn" data-act="logout">Forget passcode on this device</button></div>
-        ${btns("Done", 'data-act="close"', false)}
-      </div>`;
     } else if (s.type === "pod") {
       const x = podsOf().find(y => y.id === s.id);
       if (!x) { ui.sheet = null; root.innerHTML = ""; return; }
@@ -1296,6 +1287,8 @@
       <div class="tchips">${people.map(p => `<button class="tchip" data-act="o-rookie" data-id="${p.id}" aria-pressed="${rk.has(p.id)}">${esc(label(p))}</button>`).join("")}</div>
       <h4>Keep apart</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then everyone they shouldn't share a line with. Never broken.</p><div class="pairs">${groups("apart")}</div>
       <h4>Keep together</h4><p class="muted" style="margin:0;font-size:14px">Pick a person, then who should come with them. They come along when they fit.</p><div class="pairs">${groups("together")}</div>
+      <h4>Team passcode</h4><p class="muted" style="margin:0;font-size:14px">Change the passcode everyone uses to open the board. Everyone else will be asked for the new one.</p>
+      <form id="codeForm" class="row" style="gap:6px"><input class="line-in grow" id="newCode" placeholder="New passcode (4+ characters)" autocomplete="off"><button class="btn sm on-deep" type="submit">Change</button></form>
     </section>`;
   }
 
@@ -1718,7 +1711,6 @@
     if (a === "np-back") { const s = ui.sheet; if (s.c === "going") openSheet({ type: "late", tid: s.tid }); else closeSheet(); return; }
     if (a === "np-use") { const s = ui.sheet; useExisting(s, el.dataset.p); if (s.c === "going") openSheet({ type: "late", tid: s.tid }); else closeSheet(); return; }
     if (a === "pe-zone") { const k = el.dataset.z, v = el.dataset.v; saveZone(n => { n[k] = n[k].filter(x => x !== id); n[k + "_ok"] = n[k + "_ok"].filter(x => x !== id); if (v === "main") n[k].push(id); if (v === "ok") n[k + "_ok"].push(id); }); return; }
-    if (a === "team-settings") { openSheet({ type: "settings" }); return; }
     if (a === "pe-g") { const p = P(id); if (p && p.gender !== el.dataset.v) savePlayer({ ...p, gender: el.dataset.v }); return; }
     if (a === "pe-badge") { const p = P(id); if (p && (p.badge || "") !== el.dataset.v) savePlayer({ ...p, badge: el.dataset.v }); return; }
     if (a === "pe-active") { const p = P(id), v = el.dataset.v === "1"; if (p && !!p.active !== v) savePlayer({ ...p, active: v }); return; }

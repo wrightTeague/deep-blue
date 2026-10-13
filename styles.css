@@ -631,3 +631,7 @@ table.stats td.z{color:var(--faint)}
 .seg.wide.disp button{font-size:16px;white-space:normal;line-height:1.1}
 .two-btns .btn{min-width:0;white-space:normal;line-height:1.15}
 @media (max-width:420px){ .two-btns .btn{font-size:16px;padding:0 8px} }
+.att-row .pl{padding-left:3px}
+.deep .dot{box-shadow:none}
+.text-link{align-self:flex-start;border:0;background:transparent;min-height:44px;padding:0;font-weight:700;font-size:16px;color:var(--teal);text-align:left}
+.text-link.on-deep{color:var(--foam2);margin-top:18px;font-weight:600}
