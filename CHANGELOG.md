@@ -4,6 +4,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Oct 20, 2026
 
+**Test board**
+- **A tentacle in Roster's water.** A blue arm reaches up from the bottom of the navy section, behind the lists. Phones get one arm and laptops get one from each corner. Every 8–16 seconds it reaches for a name or a zone heading, glows cyan, wraps its tip around it, tugs it toward its base for a couple of seconds and lets it spring back. A grabbed name can't be tapped while it's held. It's covered by the same "Turn off ASCII…" switch at the bottom of Roster.
+
 **Real board and test board**
 - **Cards in the water are see-through,** so you can see the sharks swimming behind Zone spots, pods and the other navy cards.
 

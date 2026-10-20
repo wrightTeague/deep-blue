@@ -702,3 +702,7 @@ table.stats td.z{color:var(--faint)}
 .deep .deep-card.abyss,.deep .card.private{background:rgba(7,26,44,.62)}
 .deep .zchip{background:rgba(19,74,116,.6)}
 .deep .deep-card.darker .zchip{background:rgba(15,59,94,.6)}
+.ascii-tent{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;display:block;pointer-events:none}
+.ascii-tent.front{z-index:2}
+.tgrab{transition:transform .55s cubic-bezier(.34,1.56,.64,1);will-change:transform}
+.tgrab.held{transition:none;pointer-events:none}

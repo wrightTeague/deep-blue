@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.39"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.40"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -259,6 +259,7 @@
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     placeOcean();
+    placeTentacle();
     if (asciiOn()) document.querySelectorAll("#app .wave").forEach(el => DBAscii.waterline(el));
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
@@ -297,6 +298,17 @@
       return;
     }
     if (ocean.canvas.parentNode !== deepEl) deepEl.prepend(ocean.canvas);
+  }
+  // A blue tentacle in Roster's water that now and then grabs a name (ascii.js). Phones get one
+  // arm from the bottom right; laptops one from each bottom corner.
+  let tent = null;
+  function placeTentacle() {
+    const el = ui.tab === "roster" && asciiOn() && !DBAscii.reduce() ? $("#main .deep") : null;
+    if (!el) { if (tent) tent.place(null); return; }
+    const big = wide();
+    if (tent && tent.big !== big) { tent.destroy(); tent = null; }
+    if (!tent) { tent = DBAscii.tentacle({ arms: big ? [[0.1, 1], [0.9, -1]] : [[0.86, -1]], bottomInset: big ? 0 : 64, size: big ? 11 : 7 }); tent.big = big; }
+    tent.place(el);
   }
   function stopOcean() { if (ocean && ocean.engine) ocean.engine.destroy(); if (ocean) ocean.canvas.remove(); ocean = null; }
 
@@ -951,7 +963,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves and goal animations" : "Turn on ASCII waves and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves, tentacle and goal animations" : "Turn on ASCII waves, tentacle and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------

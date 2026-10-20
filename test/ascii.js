@@ -158,5 +158,111 @@
     requestAnimationFrame(frame);
   }
 
-  window.DBAscii = { gateSea, waterline, celebrate, reduce };
+  // ---------- a tentacle in the water (Roster) ----------
+  // Blue arms reach up from the bottom of the part of the navy water that's on screen, sway, and
+  // every 8–16 s one reaches for a name or heading, wraps its tip round it, glows cyan, tugs it
+  // toward its base and lets it spring back. Two canvases cover the screen inside the deep: one
+  // behind the content and one in front for the bits of the coil that pass over the word.
+  function tentacle(opt) {
+    const o = Object.assign({ arms: [[0.86, -1]], speed: 0.7, reach: 0.8, curl: 1, size: 7, targets: ".zchip, .zone-h b", bottomInset: 0 }, opt);
+    const back = document.createElement("canvas"), front = document.createElement("canvas");
+    back.className = "ascii-tent"; front.className = "ascii-tent front";
+    [back, front].forEach(cv => cv.setAttribute("aria-hidden", "true"));
+    const BLUE = [[15, 59, 94], [31, 111, 209], [95, 211, 224]], CYAN = [[19, 74, 116], [95, 211, 224], [190, 248, 255]];
+    const mix = (a, b, k) => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * k));
+    const angDiff = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+    const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+    let deepEl = null, grab = null, nextGrab = 0, started = performance.now() / 1000;
+    nextGrab = started + 5;
+    function release() { if (!grab) return; const el = grab.el; el.style.transform = ""; el.classList.remove("held"); setTimeout(() => el.classList.remove("tgrab"), 700); grab = null; }
+    function draw(t) {
+      const B = fit(back), F = fit(front), c = B.c, w = B.w, h = B.h;
+      c.clearRect(0, 0, w, h); F.c.clearRect(0, 0, w, h);
+      if (!deepEl || !deepEl.isConnected) return;
+      const dr = deepEl.getBoundingClientRect();
+      const top = Math.max(0, dr.top), bottom = Math.min(h - o.bottomInset, dr.bottom);
+      if (bottom - top < 80) { release(); return; }
+      const fs = o.size, cw = fs * 0.6, lh = fs * 1.1, cols = Math.ceil(w / cw), rows = Math.ceil((bottom - top) / lh), T = t * o.speed;
+      const N = 24, reach = o.reach * (rows / 22);
+      const cells = new Map();   // only the cells the arms cover
+      const left = Math.max(0, dr.left) / cw, span = (Math.min(w, dr.right) - Math.max(0, dr.left)) / cw;
+      const arms = o.arms.map(([ax, dir]) => [left + ax * span, dir]);
+      // grab timeline: reach 1.3 s, wrap 0.7 s, tug 1.8 s, let go 1.2 s
+      if (grab && !grab.el.isConnected) grab = null;
+      if (!grab && t >= nextGrab) {
+        const els = [...deepEl.querySelectorAll(o.targets)].filter(el => { const r = el.getBoundingClientRect(); return r.top > top + 10 && r.bottom < bottom - 30 && r.width > 0; });
+        const pick = els[Math.floor(Math.random() * els.length)];
+        if (pick) {
+          const r = pick.getBoundingClientRect(), tx = (r.left + r.width / 2) / cw, ty = (r.top - top + r.height / 2) / lh;
+          let best = 0, bd = 1e9; arms.forEach(([x], k) => { const d = Math.abs(x - tx); if (d < bd) { bd = d; best = k; } });
+          grab = { el: pick, t0: t, tx, ty, arm: best }; pick.classList.add("tgrab", "held");
+        } else nextGrab = t + 4;
+      }
+      let g = 0, wrap = 0, pull = 0;
+      if (grab) {
+        const pt = t - grab.t0;
+        g = pt < 1.3 ? smooth(pt / 1.3) : pt < 3.6 ? 1 : 1 - smooth((pt - 3.6) / 1.2);
+        wrap = pt < 1.1 ? 0 : pt < 1.8 ? smooth((pt - 1.1) / 0.7) : pt < 3.6 ? 1 : 1 - smooth((pt - 3.6) / 0.4);
+        pull = pt < 1.8 || pt >= 3.6 ? 0 : smooth((pt - 1.8) / 0.6) * (1 + 0.12 * Math.sin((pt - 1.8) * 9));
+        const bx = arms[grab.arm][0], by = rows + 1;
+        const vx = (bx - grab.tx) * cw, vy = (by - grab.ty) * lh, vl = Math.hypot(vx, vy) || 1;
+        const px = vx / vl * 26 * pull, py = vy / vl * 26 * pull;
+        grab.cx = grab.tx + px / cw; grab.cy = grab.ty + py / lh;
+        if (pt < 3.6) grab.el.style.transform = pull ? `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) rotate(${(Math.sign(vx) * pull * 7).toFixed(1)}deg)` : "";
+        else if (grab.el.classList.contains("held")) { grab.el.classList.remove("held"); grab.el.style.transform = ""; }
+        if (pt > 4.9) { const el = grab.el; setTimeout(() => el.classList.remove("tgrab"), 700); grab = null; nextGrab = t + 8 + Math.random() * 8; }
+      }
+      const put = (x, y, s, rgb, fr) => { if (x < 0 || y < 0 || x >= cols || y >= rows) return; cells.set(y * cols + x, [s, rgb, fr]); };
+      arms.forEach(([ax, dir], k) => {
+        const me = grab && grab.arm === k, G = me ? g : 0, tone = BLUE.map((c0, j) => mix(c0, CYAN[j], G));
+        const pts = []; let x = ax, y = rows + 1; const ang = -Math.PI / 2 + dir * 0.25;
+        const pulse = 0.33 + 0.67 * Math.sin(T * 0.5 + k * 1.7);
+        let step = reach;
+        if (me) { const need = Math.hypot((grab.cx - x) / 1.7, (grab.cy - y) / 0.85) / (N * 0.82); step = reach + G * Math.max(0, Math.min(reach * 1.8, need * 1.08) - reach); }
+        let contact = -1;
+        for (let i = 0; i < N; i++) {
+          const u = i / (N - 1);
+          let a = ang + Math.sin(u * 3.2 - T * 2.1 + k * 0.9) * 0.7 * u * (1 - G * 0.7) + dir * u * u * u * 2.2 * o.curl * pulse * (1 - G);
+          if (me) {
+            if (contact < 0) {
+              const aT = Math.atan2((grab.cy - y) / 0.85, (grab.cx - x) / 1.7);
+              a += angDiff(a, aT) * G * Math.min(1, 0.35 + u * 1.4);
+              if (Math.hypot((grab.cx - x) / 1.7, (grab.cy - y) / 0.85) < 2.4 && G > 0.85) contact = i;
+            } else a = pts[i - 1].a + dir * 1.15 * wrap + (1 - wrap) * angDiff(pts[i - 1].a, a);
+          }
+          pts.push({ x, y, u, a, wrapped: me && contact >= 0 && i > contact, G });
+          x += Math.cos(a) * 1.7 * step; y += Math.sin(a) * 0.85 * step;
+        }
+        for (let i = N - 1; i >= 0; i--) {
+          const p = pts[i], r = Math.max((1.6 * (1 - p.u) + 0.35) * Math.min(2, Math.max(0.8, reach * 0.9)), p.G * 0.95), shade = mix(tone[0], tone[1], 0.35 + 0.65 * (1 - p.u));
+          const fr = p.wrapped && i % 3 !== 0;
+          for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) for (let dx = -Math.ceil(r * 2); dx <= Math.ceil(r * 2); dx++) {
+            const e = (dx / (2 * r)) ** 2 + (dy / r) ** 2; if (e > 1) continue;
+            const lower = dy > 0 ? 0.75 : 1;
+            put(Math.round(p.x + dx), Math.round(p.y + dy), e > 0.56 ? "▓" : "█", shade.map(v => Math.round(v * lower)), fr);
+          }
+          if (i % 2 === 0 && i < N - 3) { const nx = -Math.sin(p.a) * dir, ny = Math.cos(p.a) * dir; put(Math.round(p.x + nx * r * 2), Math.round(p.y + ny * r), "o", tone[2], fr); }
+        }
+      });
+      [c, F.c].forEach(cx => { cx.save(); cx.beginPath(); cx.rect(Math.max(0, dr.left), top, Math.min(w, dr.right) - Math.max(0, dr.left), bottom - top); cx.clip(); cx.font = `700 ${fs}px ${MONO}`; cx.textBaseline = "top"; });
+      for (const [i, [s, rgbv, fr]] of cells) {
+        const cx = fr ? F.c : c, X = (i % cols) * cw, Y = top + Math.floor(i / cols) * lh, [r, g2, b] = rgbv;
+        if (s === "o") { cx.fillStyle = `rgb(${r},${g2},${b})`; cx.fillText(s, X, Y); }
+        else { cx.fillStyle = `rgba(${r},${g2},${b},${s === "█" ? 0.92 : 0.65})`; cx.fillRect(X, Y, cw + 0.5, lh + 0.5); }
+      }
+      c.restore(); F.c.restore();
+    }
+    return {
+      // Move the arm into this page's water (each redraw builds a new one) or take it out.
+      place(el) {
+        if (!el) { release(); back.remove(); front.remove(); deepEl = null; return; }
+        deepEl = el;
+        if (back.parentNode !== el) { el.insertBefore(back, el.querySelector(".deep-in")); el.appendChild(front); }
+        if (![...items].some(it => it.cv === back)) add(back, draw, 20); else kick();
+      },
+      destroy() { release(); back.remove(); front.remove(); },
+    };
+  }
+
+  window.DBAscii = { gateSea, waterline, celebrate, reduce, tentacle };
 })();
