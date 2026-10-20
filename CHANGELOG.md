@@ -8,6 +8,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 - **Sharks in the deep on Home.** ASCII sharks swim in the blue water under the wave, behind The season ahead (two on phones, four on laptops). Other tabs stay plain. The sharks are by @stackedlol, credited at the bottom of Home.
 - **"Turn off sharks on Home"** at the bottom of Roster. It only changes the phone or laptop you're on.
 - The ocean band across the top, added earlier today, is gone. The sharks moved into the deep instead.
+- **The sharks stay in the part of the water you can see,** so they don't swim off screen or down below the bottom of the screen. When you scroll down, they follow.
+- **Smaller characters on laptops,** so the sharks there have more detail.
 
 ## Oct 13, 2026
 
