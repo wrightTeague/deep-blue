@@ -11,6 +11,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 - **The sharks stay in the part of the water you can see,** so they don't swim off screen or down below the bottom of the screen. When you scroll down, they follow.
 - **Smaller characters on laptops,** so the sharks there have more detail.
 - **A smaller shark on phones, drawn in smaller characters,** so it keeps the same detail but has room to turn around without leaving the screen.
+- **Tapping the water doesn't make a splash anymore.**
 
 ## Oct 13, 2026
 
