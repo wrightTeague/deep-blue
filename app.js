@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.13.3"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.19.1"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -257,10 +257,48 @@
       <main id="main" class="tab-${ui.tab}">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : ui.tab === "home" ? renderHome() : ui.tab === "tour" ? renderTour() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
+    placeOcean();
+    if (asciiOn()) document.querySelectorAll("#app .wave").forEach(el => DBAscii.waterline(el));
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
     if (ui.tab === "points") afterPoints();
   }
+  // ---------- sharks in the deep (every page) ----------
+  // One canvas lasts the whole visit. Every redraw rebuilds the page, so it's moved into the new
+  // deep section each time and the sharks keep swimming instead of starting over. On a screen with
+  // no water (edit lines) it's out of the page, which pauses it. Each device can turn it off at the
+  // bottom of Roster.
+  let ocean = null;
+  const sharksOn = () => store.get("sharks", true) !== false;
+  // ASCII sea on the passcode screen, the waterline in characters, and the goal celebration (ascii.js).
+  const asciiOn = () => !!window.DBAscii && store.get("ascii", true) !== false;
+  function placeOcean() {
+    const deepEl = sharksOn() && window.AsciiSharks ? $("#main .deep") : null;   // every page with water
+    if (!deepEl) { if (ocean) ocean.canvas.remove(); return; }
+    if (ocean && ocean.failed) return;
+    // A new page gets a fresh ocean sized to its own water; redraws on the same page keep the sharks swimming.
+    if (ocean && ocean.tab !== ui.tab) stopOcean();
+    if (!ocean) {
+      const c = document.createElement("canvas");
+      c.className = "deep-sharks"; c.setAttribute("aria-hidden", "true");
+      deepEl.prepend(c);
+      try {
+        // Laptops: four sharks drawn with smaller characters. Phones: one smaller shark in even smaller
+        // characters (same detail), so it can turn around without leaving the screen.
+        // Either way the sharks stay in the part of the water that's on screen.
+        const big = wide();
+        const sharks = big ? undefined : [{ kind: "classic", size: 1 }];
+        ocean = { canvas: c, tab: ui.tab, engine: new AsciiSharks.OceanEngine(c, sharks, {
+          background: "#134a74", grid: 0.03, noSplash: true, cell: big ? 8 : 4, sharkLength: big ? 0 : 170,
+          followView: { bottomInset: big ? 0 : 64, minHeight: big ? 300 : 240 },
+        }) };
+      } catch (e) { c.remove(); ocean = { canvas: c, tab: ui.tab, engine: null, failed: true }; }
+      return;
+    }
+    if (ocean.canvas.parentNode !== deepEl) deepEl.prepend(ocean.canvas);
+  }
+  function stopOcean() { if (ocean && ocean.engine) ocean.engine.destroy(); if (ocean) ocean.canvas.remove(); ocean = null; }
+
   // Crossing the phone / laptop width changes the Points layout, so redraw then.
   window.addEventListener("resize", () => { clearTimeout(render.rt); render.rt = setTimeout(() => { if (S.team && ui.wasWide !== wide()) render(); }, 150); });
 
@@ -456,7 +494,7 @@
         if (!line.length) return `<div class="pt-block"><p class="muted" style="margin:0">Pt ${from + k}: we scored. Add players to record the goal.</p></div>`;
         if (!x.scorer) return `<div class="pt-block${k === pending ? " now" : ""}"><div class="pt-title"><b>Who scored?</b><span>Pt ${from + k}</span></div><div class="ga-grid">${line.map(s => tileBtn("set-goal", k, s)).join("")}</div>
           <div class="ga-links"><span></span><button class="quiet" data-act="result" data-id="${pt.id}" data-k="${k}" data-v="us">Undo this point</button></div></div>`;
-        return `<div class="pt-block${k === pending ? " now" : ""}"><div class="pt-title"><b>Who threw it?</b><span>Goal: ${esc(label(P(x.scorer)))}</span></div><div class="ga-grid">${line.map(s => s.p === x.scorer ? tileBtn("ga-change", k, s, "scorer", "GOAL") : tileBtn("set-assist", k, s)).join("")}<button class="ga-btn none" data-act="set-assist" data-id="${pt.id}" data-k="${k}" data-p="none">No assist</button></div>
+        return `<div class="pt-block${k === pending ? " now" : ""}"><div class="pt-title"><b>Who threw it?</b><span>Goal: ${esc(label(P(x.scorer)))}</span></div><div class="ga-grid">${line.map(s => s.p === x.scorer ? tileBtn("ga-change", k, s, "scorer", "GOAL") : tileBtn("set-assist", k, s)).join("")}<button class="ga-btn none" data-act="set-assist" data-id="${pt.id}" data-k="${k}" data-p="none">No assist (Callahan)</button></div>
           <div class="ga-links"><button data-act="ga-change" data-id="${pt.id}" data-k="${k}">Change scorer</button><button class="quiet" data-act="result" data-id="${pt.id}" data-k="${k}" data-v="us">Undo this point</button></div></div>`;
       }
       if (k === nowK) return `<div class="pt-block now" id="nowRow"><div class="od-row"><span class="pt-n disp">Pt ${from + k}</span><span class="grow"></span><span class="lbl">Start on</span>${odSeg(k, x)}</div>${resultBtns(k, x)}</div>`;
@@ -749,7 +787,7 @@
       ${undated.length ? `<span class="eyebrow" style="margin-top:10px">No date yet</span><div>${undated.map((t, k) => row(t, k + 1)).join("")}</div>` : ""}
       <button class="add-dashed" data-act="home-new-tour">+ Add tournament</button>
       ${recent.length ? `<span class="eyebrow" style="margin-top:14px">Recent games</span><div>${recent.map(({ g, s }) => `<button class="game-row" data-act="home-game" data-id="${g.id}"><span class="gn"><b>${esc(g.name)}</b>${tourOf(g) ? `<span>${esc(tourOf(g).name)}</span>` : ""}</span><span class="gs ${s.us > s.them ? "won" : s.them > s.us ? "lost" : ""}">${s.us}–${s.them}</span></button>`).join("")}</div>` : ""}`;
-    return `<div class="above">${hero}${practiceCard}${last}</div>${deep(below)}`;
+    return `<div class="above">${hero}${practiceCard}${last}</div>${deep(below + (sharksOn() ? `<a class="deep-credit" href="https://github.com/stackedlol/ascii-sharks" target="_blank" rel="noopener">sharks by @stackedlol</a>` : ""))}`;
   }
   // Removing a tournament: delete its games too, or keep them (they move to "Other games").
   function removeChoices(t, act, cls) {
@@ -912,7 +950,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves and goal animations" : "Turn on ASCII waves and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1590,7 +1628,19 @@
       return;
     }
     if (a === "set-goal") { const k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { const o = pt.outcomes[k]; o.scorer = v; if (o.assist === v) o.assist = null; }); return; }
-    if (a === "set-assist") { const done = watchFinish(id), k = +el.dataset.k, v = el.dataset.p; patchPoint(id, pt => { pt.outcomes[k].assist = v; }); done(); return; }
+    if (a === "set-assist") {
+      const done = watchFinish(id), k = +el.dataset.k, v = el.dataset.p;
+      const pt0 = S.points.find(x => x.id === id), o0 = pt0 && outs(pt0)[k], wasDone = !!(o0 && o0.assist);
+      // Where the disc flies from (the button tapped) and to (the score), measured before the redraw.
+      const r1 = el.getBoundingClientRect(), sc = document.querySelector(".game-head .score b, .score.inline b"), r2 = sc && sc.getBoundingClientRect();
+      patchPoint(id, pt => { pt.outcomes[k].assist = v; });
+      done();
+      if (asciiOn() && o0 && o0.result === "us" && o0.scorer && !wasDone) DBAscii.celebrate({
+        word: v === "none" ? "CALLAHAN?!" : o0.start_on === "D" ? "BREAK" : o0.start_on === "O" ? "HOLD" : "",
+        name: label(P(o0.scorer)), from: { x: r1.left + r1.width / 2, y: r1.top + r1.height / 2 }, to: r2 ? { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2 } : null,
+      });
+      return;
+    }
     if (a === "ga-change") { const k = +el.dataset.k; patchPoint(id, pt => { pt.outcomes[k].scorer = null; pt.outcomes[k].assist = null; }); return; }
     if (a === "pick-slot") { const pt = S.points.find(x => x.id === id), k = +el.dataset.k, cur = pt?.lineup?.[k]?.p || null; openSheet({ type: "pick", pointId: id, k, current: cur, f: (cur && P(cur)?.gender) || "" }); return; }
     if (a === "pick-f") { ui.sheet.f = el.dataset.v; renderSheet(); return; }
@@ -1740,6 +1790,8 @@
       try { navigator.clipboard.writeText(text).then(() => toast("Link copied"), () => toast("Select the link and copy it")); } catch (err) { toast("Select the link and copy it"); }
       return;
     }
+    if (a === "ascii") { const on = !asciiOn(); store.set("ascii", on); render(); toast(on ? "ASCII waves are back on." : "ASCII waves are off on this phone."); return; }
+    if (a === "sharks") { const on = !sharksOn(); store.set("sharks", on); if (!on) stopOcean(); render(); toast(on ? "Sharks are back." : "Sharks are off on this phone."); return; }
     if (a === "logout") { store.del("code"); store.del("cache"); store.del("owner"); CODE = ""; location.reload(); return; }
   });
 
@@ -1865,7 +1917,9 @@
   // ---------- gate ----------
   function renderGate(msg) {
     ui.sheet = null; renderSheet();
-    const sea = `<div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div>`;
+    const sea = asciiOn() ? `<div class="gate-sea ascii"><canvas id="gateSeaCv" aria-hidden="true"></canvas><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div>`
+      : `<div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div>`;
+    setTimeout(() => { const cv = document.getElementById("gateSeaCv"); if (cv) DBAscii.gateSea(cv); }, 0);
     if (!TOKEN) {
       $("#app").innerHTML = `<div class="gate"><div class="gate-card"><span class="gate-logo">${LOGO}</span><h1>Deep Blue</h1><p>This board needs the team link. Ask a captain to send it to you.</p></div>${sea}</div>`;
       return;

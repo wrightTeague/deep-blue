@@ -4,6 +4,15 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Oct 19, 2026
 
+**Real board**
+- **Everything from today's test board is on the real board:**
+  - ASCII sharks swimming in the navy water on every page
+  - the rolling ASCII sea on the passcode screen
+  - the ASCII waterline
+  - the goal celebration: a spinning disc splashes into the score, then HOLD, BREAK or CALLAHAN?! flashes after you pick the scorer and thrower
+  - "No assist (Callahan)"
+- Both can be turned off per phone at the bottom of Roster. Phones set to reduce motion get still waves and no celebration.
+
 **Test board**
 - **Sharks on every page.** They now swim in the navy water on Points, Practice, Stats and Roster too, not just Home. "Turn off sharks" at the bottom of Roster turns them off everywhere on that phone.
 - **ASCII sea on the passcode screen.** A slow rolling sea drawn in characters sits under the login.

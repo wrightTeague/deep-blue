@@ -101,6 +101,11 @@ select.line-in{padding:0 10px}
 .above:last-child{padding-bottom:calc(var(--nav-h) + 40px)}
 .wave{display:block;width:100%;height:30px;margin-top:18px;flex:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='390' height='30' viewBox='0 0 390 30'%3E%3Cpath d='M0 14 C 32 2, 65 2, 97 14 S 162 26, 195 14 S 260 2, 292 14 S 357 26, 390 14 L 390 30 L 0 30 Z' fill='%23134a74'/%3E%3C/svg%3E") repeat-x left bottom/390px 30px}
 .deep{flex:1 0 auto;background:var(--sea);color:#fff;padding:0 0 calc(var(--nav-h) + 24px + env(safe-area-inset-bottom,0px))}
+/* Sharks swimming in Home's deep (ocean.js). The canvas sits behind the content, in the deep's own blue. */
+main .deep{position:relative;isolation:isolate;overflow:hidden}
+.deep-sharks{position:absolute;inset:0;z-index:-1;display:block;width:100%;height:100%;opacity:.8;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace}
+.deep-credit{align-self:flex-end;font-size:12px;font-weight:600;color:var(--foam);text-decoration:none;margin-top:8px}
+.deep-credit:hover,.deep-credit:focus-visible{color:#fff;text-decoration:underline}
 .deep-in{max-width:1240px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;gap:12px}
 .deep .eyebrow{color:var(--foam2)}
 .deep .muted{color:var(--foam2)}
@@ -661,6 +666,7 @@ table.stats td.z{color:var(--faint)}
 .score.plan.inline{flex-direction:column;align-items:flex-start;gap:0}
 .text-link{align-self:flex-start;border:0;background:transparent;min-height:44px;padding:0;font-weight:700;font-size:16px;color:var(--teal);text-align:left}
 .text-link.on-deep{color:var(--foam2);margin-top:18px;font-weight:600}
+.text-link.on-deep + .text-link.on-deep{margin-top:0}
 .text-link.armed{color:#ffb4a6;font-weight:800}
 .date-row{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:var(--muted)}
 .date-row .date-pill{max-width:none}
@@ -682,3 +688,11 @@ table.stats td.z{color:var(--faint)}
 @media (max-width:420px){ .two-btns .btn{font-size:16px;padding:0 8px} }
 .att-row .pl{padding-left:3px}
 .deep .dot{box-shadow:none}
+
+/* ---------- ASCII touches (ascii.js) ---------- */
+.wave[data-ascii]{position:relative;background:none;height:40px;margin-top:8px}
+.ascii-wave{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none}
+.gate-sea.ascii{min-height:250px;display:flex;flex-direction:column;justify-content:flex-end}
+.gate-sea.ascii canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.gate-sea.ascii .gate-foot{background:transparent;min-height:0;padding-top:12px}
+.ascii-celebrate{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none;display:block}
