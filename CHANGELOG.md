@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 20, 2026
+
+**Real board and test board**
+- **Cards in the water are see-through,** so you can see the sharks swimming behind Zone spots, pods and the other navy cards.
+
 ## Oct 19, 2026
 
 **Real board**

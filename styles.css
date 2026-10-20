@@ -696,3 +696,9 @@ table.stats td.z{color:var(--faint)}
 .gate-sea.ascii canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .gate-sea.ascii .gate-foot{background:transparent;min-height:0;padding-top:12px}
 .ascii-celebrate{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none;display:block}
+/* Cards in the water are see-through, so the sharks swimming behind them still show. */
+.deep .deep-card{background:rgba(15,59,94,.5)}
+.deep .deep-card.darker{background:rgba(11,44,71,.55)}
+.deep .deep-card.abyss,.deep .card.private{background:rgba(7,26,44,.62)}
+.deep .zchip{background:rgba(19,74,116,.6)}
+.deep .deep-card.darker .zchip{background:rgba(15,59,94,.6)}
