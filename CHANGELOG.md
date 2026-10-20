@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 19, 2026
+
+**Test board**
+- **An ocean band across the top**, with ASCII sharks swimming through it (two on phones, four on laptops). It scrolls away with the page and stops animating when it's off screen. The sharks are by @stackedlol, credited in the corner of the band.
+
 ## Oct 13, 2026
 
 **Real board**

@@ -20,6 +20,8 @@ Static site (`index.html`, `app.js`, `styles.css`) on GitHub Pages. Data is in a
 
 `supabase.js` is the official supabase-js 2.117.2 browser build, bundled so the site has no other script dependencies.
 
+`test/ocean.js` is the ocean band at the top of the test board: a bundled copy of [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks) (used with the author's OK), changed to swim sideways in a short strip.
+
 ## Test board
 
 `test/` is a separate copy of the app for trying new features before they go to the real board. It runs against its own test team in the same database, with a copy of the real data, so nothing there touches the real board. It has its own `version.json`.
