@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.34"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.35"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -278,13 +278,14 @@
       c.className = "deep-sharks"; c.setAttribute("aria-hidden", "true");
       deepEl.prepend(c);
       try {
-        // Laptops: four sharks drawn with smaller characters. Phones: one, with room left for the bottom nav.
+        // Laptops: four sharks drawn with smaller characters. Phones: one smaller shark in even smaller
+        // characters (same detail), so it can turn around without leaving the screen.
         // Either way the sharks stay in the part of the water that's on screen.
         const big = wide();
         const sharks = big ? undefined : [{ kind: "classic", size: 1 }];
         ocean = { canvas: c, engine: new AsciiSharks.OceanEngine(c, sharks, {
-          background: "#134a74", grid: 0.03, cell: big ? 8 : 0,
-          followView: { bottomInset: big ? 0 : 64, minHeight: big ? 300 : 400 },
+          background: "#134a74", grid: 0.03, cell: big ? 8 : 4, sharkLength: big ? 0 : 170,
+          followView: { bottomInset: big ? 0 : 64, minHeight: big ? 300 : 240 },
         }) };
       } catch (e) { c.remove(); ocean = { canvas: c, engine: null, failed: true }; }
       return;
