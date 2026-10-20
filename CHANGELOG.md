@@ -5,6 +5,11 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 19, 2026
 
 **Test board**
+- **ASCII sea on the passcode screen.** A slow rolling sea drawn in characters sits under the login.
+- **ASCII waterline.** The wave between the top of each page and the navy section is now a gently bobbing line of ~ and ≈ characters.
+- **Goal celebration.** After you pick the scorer and the thrower, a spinning disc splashes into the score, then HOLD (the point started on O), BREAK (it started on D) or CALLAHAN?! (no assist) flashes for a moment with the scorer's name.
+- **"No assist" is now "No assist (Callahan)",** so it's clear that's what it means.
+- **Turn it off per phone** at the bottom of Roster. Phones set to reduce motion get still waves and no celebration.
 - **Sharks in the deep on Home.** ASCII sharks swim in the blue water under the wave, behind The season ahead (one on phones, four on laptops). Other tabs stay plain. The sharks are by @stackedlol, credited at the bottom of Home.
 - **"Turn off sharks on Home"** at the bottom of Roster. It only changes the phone or laptop you're on.
 - The ocean band across the top, added earlier today, is gone. The sharks moved into the deep instead.

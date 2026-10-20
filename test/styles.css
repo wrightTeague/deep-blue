@@ -688,3 +688,11 @@ table.stats td.z{color:var(--faint)}
 @media (max-width:420px){ .two-btns .btn{font-size:16px;padding:0 8px} }
 .att-row .pl{padding-left:3px}
 .deep .dot{box-shadow:none}
+
+/* ---------- ASCII touches (ascii.js) ---------- */
+.wave[data-ascii]{position:relative;background:none;height:40px;margin-top:8px}
+.ascii-wave{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none}
+.gate-sea.ascii{min-height:250px;display:flex;flex-direction:column;justify-content:flex-end}
+.gate-sea.ascii canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.gate-sea.ascii .gate-foot{background:transparent;min-height:0;padding-top:12px}
+.ascii-celebrate{position:fixed;inset:0;width:100vw;height:100vh;z-index:80;pointer-events:none;display:block}
