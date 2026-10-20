@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.37"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.38"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -264,18 +264,21 @@
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
     if (ui.tab === "points") afterPoints();
   }
-  // ---------- sharks in the deep (Home only) ----------
+  // ---------- sharks in the deep (every page) ----------
   // One canvas lasts the whole visit. Every redraw rebuilds the page, so it's moved into the new
-  // deep section each time and the sharks keep swimming instead of starting over. On other tabs
-  // it's out of the page, which pauses it. Each device can turn it off at the bottom of Roster.
+  // deep section each time and the sharks keep swimming instead of starting over. On a screen with
+  // no water (edit lines) it's out of the page, which pauses it. Each device can turn it off at the
+  // bottom of Roster.
   let ocean = null;
   const sharksOn = () => store.get("sharks", true) !== false;
   // ASCII sea on the passcode screen, the waterline in characters, and the goal celebration (ascii.js).
   const asciiOn = () => !!window.DBAscii && store.get("ascii", true) !== false;
   function placeOcean() {
-    const deepEl = ui.tab === "home" && sharksOn() && window.AsciiSharks ? $("#main .deep") : null;
+    const deepEl = sharksOn() && window.AsciiSharks ? $("#main .deep") : null;   // every page with water
     if (!deepEl) { if (ocean) ocean.canvas.remove(); return; }
     if (ocean && ocean.failed) return;
+    // A new page gets a fresh ocean sized to its own water; redraws on the same page keep the sharks swimming.
+    if (ocean && ocean.tab !== ui.tab) stopOcean();
     if (!ocean) {
       const c = document.createElement("canvas");
       c.className = "deep-sharks"; c.setAttribute("aria-hidden", "true");
@@ -286,11 +289,11 @@
         // Either way the sharks stay in the part of the water that's on screen.
         const big = wide();
         const sharks = big ? undefined : [{ kind: "classic", size: 1 }];
-        ocean = { canvas: c, engine: new AsciiSharks.OceanEngine(c, sharks, {
+        ocean = { canvas: c, tab: ui.tab, engine: new AsciiSharks.OceanEngine(c, sharks, {
           background: "#134a74", grid: 0.03, noSplash: true, cell: big ? 8 : 4, sharkLength: big ? 0 : 170,
           followView: { bottomInset: big ? 0 : 64, minHeight: big ? 300 : 240 },
         }) };
-      } catch (e) { c.remove(); ocean = { canvas: c, engine: null, failed: true }; }
+      } catch (e) { c.remove(); ocean = { canvas: c, tab: ui.tab, engine: null, failed: true }; }
       return;
     }
     if (ocean.canvas.parentNode !== deepEl) deepEl.prepend(ocean.canvas);
@@ -948,7 +951,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks on Home" : "Turn on sharks on Home"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves and goal animations" : "Turn on ASCII waves and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves and goal animations" : "Turn on ASCII waves and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1789,7 +1792,7 @@
       return;
     }
     if (a === "ascii") { const on = !asciiOn(); store.set("ascii", on); render(); toast(on ? "ASCII waves are back on." : "ASCII waves are off on this phone."); return; }
-    if (a === "sharks") { const on = !sharksOn(); store.set("sharks", on); if (!on) stopOcean(); render(); toast(on ? "Sharks are back on Home." : "Sharks are off on this phone."); return; }
+    if (a === "sharks") { const on = !sharksOn(); store.set("sharks", on); if (!on) stopOcean(); render(); toast(on ? "Sharks are back." : "Sharks are off on this phone."); return; }
     if (a === "logout") { store.del("code"); store.del("cache"); store.del("owner"); CODE = ""; location.reload(); return; }
   });
 

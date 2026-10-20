@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 19, 2026
 
 **Test board**
+- **Sharks on every page.** They now swim in the navy water on Points, Practice, Stats and Roster too, not just Home. "Turn off sharks" at the bottom of Roster turns them off everywhere on that phone.
 - **ASCII sea on the passcode screen.** A slow rolling sea drawn in characters sits under the login.
 - **ASCII waterline.** The wave between the top of each page and the navy section is now a gently bobbing line of ~ and ≈ characters.
 - **Goal celebration.** After you pick the scorer and the thrower, a spinning disc splashes into the score, then HOLD (the point started on O), BREAK (it started on D) or CALLAHAN?! (no assist) flashes for a moment with the scorer's name.
