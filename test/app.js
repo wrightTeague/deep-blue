@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.31"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.32"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -258,10 +258,35 @@
       <main id="main" class="tab-${ui.tab}">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : ui.tab === "home" ? renderHome() : ui.tab === "tour" ? renderTour() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
+    placeOcean();
     renderSheet();
     if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.start != null) el.setSelectionRange(keep.start, keep.end); } catch (e) {} } }
     if (ui.tab === "points") afterPoints();
   }
+  // ---------- sharks in the deep (Home only) ----------
+  // One canvas lasts the whole visit. Every redraw rebuilds the page, so it's moved into the new
+  // deep section each time and the sharks keep swimming instead of starting over. On other tabs
+  // it's out of the page, which pauses it. Each device can turn it off at the bottom of Roster.
+  let ocean = null;
+  const sharksOn = () => store.get("sharks", true) !== false;
+  function placeOcean() {
+    const deepEl = ui.tab === "home" && sharksOn() && window.AsciiSharks ? $("#main .deep") : null;
+    if (!deepEl) { if (ocean) ocean.canvas.remove(); return; }
+    if (ocean && ocean.failed) return;
+    if (!ocean) {
+      const c = document.createElement("canvas");
+      c.className = "deep-sharks"; c.setAttribute("aria-hidden", "true");
+      deepEl.prepend(c);
+      try {
+        const sharks = wide() ? undefined : [{ kind: "classic", size: 1 }, { kind: "classic", size: 0.8 }];
+        ocean = { canvas: c, engine: new AsciiSharks.OceanEngine(c, sharks, { background: "#134a74", grid: 0.03 }) };
+      } catch (e) { c.remove(); ocean = { canvas: c, engine: null, failed: true }; }
+      return;
+    }
+    if (ocean.canvas.parentNode !== deepEl) deepEl.prepend(ocean.canvas);
+  }
+  function stopOcean() { if (ocean && ocean.engine) ocean.engine.destroy(); if (ocean) ocean.canvas.remove(); ocean = null; }
+
   // Crossing the phone / laptop width changes the Points layout, so redraw then.
   window.addEventListener("resize", () => { clearTimeout(render.rt); render.rt = setTimeout(() => { if (S.team && ui.wasWide !== wide()) render(); }, 150); });
 
@@ -750,7 +775,7 @@
       ${undated.length ? `<span class="eyebrow" style="margin-top:10px">No date yet</span><div>${undated.map((t, k) => row(t, k + 1)).join("")}</div>` : ""}
       <button class="add-dashed" data-act="home-new-tour">+ Add tournament</button>
       ${recent.length ? `<span class="eyebrow" style="margin-top:14px">Recent games</span><div>${recent.map(({ g, s }) => `<button class="game-row" data-act="home-game" data-id="${g.id}"><span class="gn"><b>${esc(g.name)}</b>${tourOf(g) ? `<span>${esc(tourOf(g).name)}</span>` : ""}</span><span class="gs ${s.us > s.them ? "won" : s.them > s.us ? "lost" : ""}">${s.us}–${s.them}</span></button>`).join("")}</div>` : ""}`;
-    return `<div class="above">${hero}${practiceCard}${last}</div>${deep(below)}`;
+    return `<div class="above">${hero}${practiceCard}${last}</div>${deep(below + (sharksOn() ? `<a class="deep-credit" href="https://github.com/stackedlol/ascii-sharks" target="_blank" rel="noopener">sharks by @stackedlol</a>` : ""))}`;
   }
   // Removing a tournament: delete its games too, or keep them (they move to "Other games").
   function removeChoices(t, act, cls) {
@@ -913,7 +938,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks on Home" : "Turn on sharks on Home"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1741,6 +1766,7 @@
       try { navigator.clipboard.writeText(text).then(() => toast("Link copied"), () => toast("Select the link and copy it")); } catch (err) { toast("Select the link and copy it"); }
       return;
     }
+    if (a === "sharks") { const on = !sharksOn(); store.set("sharks", on); if (!on) stopOcean(); render(); toast(on ? "Sharks are back on Home." : "Sharks are off on this phone."); return; }
     if (a === "logout") { store.del("code"); store.del("cache"); store.del("owner"); CODE = ""; location.reload(); return; }
   });
 

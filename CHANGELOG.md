@@ -5,7 +5,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 19, 2026
 
 **Test board**
-- **An ocean band across the top**, with ASCII sharks swimming through it (two on phones, four on laptops). It scrolls away with the page and stops animating when it's off screen. The sharks are by @stackedlol, credited in the corner of the band.
+- **Sharks in the deep on Home.** ASCII sharks swim in the blue water under the wave, behind The season ahead (two on phones, four on laptops). Other tabs stay plain. The sharks are by @stackedlol, credited at the bottom of Home.
+- **"Turn off sharks on Home"** at the bottom of Roster. It only changes the phone or laptop you're on.
+- The ocean band across the top, added earlier today, is gone. The sharks moved into the deep instead.
 
 ## Oct 13, 2026
 
