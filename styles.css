@@ -702,3 +702,7 @@ table.stats td.z{color:var(--faint)}
 .deep .deep-card.abyss,.deep .card.private{background:rgba(7,26,44,.62)}
 .deep .zchip{background:rgba(19,74,116,.6)}
 .deep .deep-card.darker .zchip{background:rgba(15,59,94,.6)}
+/* Phones: swipe between line cards */
+#pointsTrack{touch-action:pan-y}
+#main.tab-points{overflow-x:clip}
+#pointsTrack .swiping{will-change:transform;user-select:none;-webkit-user-select:none}

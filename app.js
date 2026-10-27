@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.20.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.27.1"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -241,6 +241,7 @@
   function render() {
     if (!S.team) return;
     if (ui.drag) { ui.drag.pending = true; return; }   // never redraw under a finger mid-drag
+    if (ui.swiping) { ui.swiping.pending = true; return; }   // or mid-swipe
     const app = $("#app");
     const active = document.activeElement;
     const keep = active && active.id ? { id: active.id, start: active.selectionStart, end: active.selectionEnd } : null;
@@ -1478,6 +1479,59 @@
     };
     document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
     document.addEventListener("contextmenu", e => { if (e.target.closest && e.target.closest(".etile")) e.preventDefault(); });
+  })();
+
+  // Phones: swipe the line card left for the next line, right for the one before. The card
+  // follows the finger; a mostly-up-and-down move is left to the page as a scroll.
+  (function setupSwipe() {
+    let s = null, noClickUntil = 0;
+    const SLOP = 10, track = () => document.getElementById("pointsTrack");
+    const settle = () => { const p = ui.swiping && ui.swiping.pending; ui.swiping = null; if (p) render(); };
+    document.addEventListener("pointerdown", e => {
+      if (s || e.pointerType === "mouse" || wide() || ui.tab !== "points" || ui.editLines || ui.sheet) return;
+      const tr = track(), el = tr && tr.firstElementChild; if (!el || !tr.contains(e.target)) return;
+      s = { x: e.clientX, y: e.clientY, id: e.pointerId, el, dx: 0, on: false, t: 0, lx: e.clientX };
+    });
+    document.addEventListener("pointermove", e => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x, dy = e.clientY - s.y;
+      if (!s.on) {
+        if (Math.abs(dy) > SLOP && Math.abs(dy) >= Math.abs(dx)) { s = null; return; }   // a scroll
+        if (Math.abs(dx) < SLOP || !s.el.isConnected) return;
+        s.on = true; ui.swiping = { pending: false }; s.el.style.transition = "none"; s.el.classList.add("swiping");
+      }
+      const g = game(), n = g ? gamePoints(g.id).length : 0, i = (ui.swipe && ui.swipe.i) || 0;
+      const edge = (dx > 0 && i <= 0) || (dx < 0 && i >= n);   // nothing that way: resist
+      s.dx = edge ? dx * 0.25 : dx; s.v = (e.clientX - s.lx) / Math.max(1, e.timeStamp - (s.t || e.timeStamp - 16)); s.lx = e.clientX; s.t = e.timeStamp; s.edge = edge;
+      s.el.style.transform = `translateX(${s.dx}px)`;
+      s.el.style.opacity = String(Math.max(0.35, 1 - Math.abs(s.dx) / (window.innerWidth * 1.4)));
+    });
+    const end = e => {
+      if (!s || (e.pointerId != null && e.pointerId !== s.id)) return;
+      const p = s; s = null; if (!p.on) return;
+      noClickUntil = Date.now() + 400;
+      const el = p.el, w = window.innerWidth;
+      const go = e.type === "pointerup" && !p.edge && (Math.abs(p.dx) > w * 0.22 || (Math.abs(p.dx) > 40 && Math.abs(p.v || 0) > 0.45 && Math.sign(p.v) === Math.sign(p.dx)));
+      el.classList.remove("swiping");
+      if (!go) {
+        el.style.transition = "transform .2s ease-out, opacity .2s"; el.style.transform = ""; el.style.opacity = "";
+        setTimeout(settle, 200); return;
+      }
+      const dir = p.dx < 0 ? 1 : -1;   // swipe left → next line
+      el.style.transition = "transform .16s ease-in, opacity .16s"; el.style.transform = `translateX(${p.dx < 0 ? -w : w}px)`; el.style.opacity = "0";
+      setTimeout(() => {
+        ui.swiping = null;
+        showLine(((ui.swipe && ui.swipe.i) || 0) + dir);
+        const c = track() && track().firstElementChild; if (!c) return;
+        c.style.transition = "none"; c.style.transform = `translateX(${dir * w * 0.35}px)`; c.style.opacity = "0";
+        c.getBoundingClientRect();
+        c.style.transition = "transform .22s ease-out, opacity .22s"; c.style.transform = ""; c.style.opacity = "";
+        setTimeout(() => { c.style.transition = ""; }, 240);
+      }, 160);
+    };
+    document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end);
+    // The finger lifting off a button at the end of a swipe isn't a tap.
+    document.addEventListener("click", e => { if (Date.now() < noClickUntil && track()?.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } }, true);
   })();
 
   // ---------- actions ----------

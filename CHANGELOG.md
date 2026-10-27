@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 27, 2026
+
+**Real board and test board**
+- **Swipe between lines on phones.** On Points, swipe the line card left for the next line and right for the one before. The card follows your finger and snaps back if you don't swipe far enough. Up-and-down still scrolls the page, and swiping is off while you're editing lines.
+
 ## Oct 20, 2026
 
 **Test board**
