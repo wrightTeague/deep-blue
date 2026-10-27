@@ -5,6 +5,8 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 27, 2026
 
 **Real board and test board**
+- **Readable H / C on laptop's planned lines.** Below the water the H and C letters were pale on a pale chip and almost invisible. They're now bright letters on a tinted see-through chip, like the DD / SD tags.
+- **Planned lines get darker the further ahead they are,** instead of the shading repeating every row of four.
 - **Swipe between lines on phones.** On Points, swipe the line card left for the next line and right for the one before. The card follows your finger and snaps back if you don't swipe far enough. Up-and-down still scrolls the page, and swiping is off while you're editing lines.
 
 ## Oct 20, 2026

@@ -598,12 +598,15 @@ table.stats td.z{color:var(--faint)}
 .point.dark .cfoot{border-top-color:rgba(255,255,255,.2)}
 .point.dark .cw{color:#ffb4a8} .point.dark .cm{color:var(--m-light)}
 .point.dark .role-chip{color:var(--foam2);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25)}
-.point.dark .role-chip[data-r="H"],.point.dark .role-chip[data-r="C"]{box-shadow:none}
+/* H / C on a dark card: a tinted see-through chip with a bright letter, like the DD / SD tags */
+.point.dark .role-chip[data-r="H"]{background:rgba(255,197,51,.2);color:#ffd88f;box-shadow:inset 0 0 0 1px rgba(255,210,120,.35)}
+.point.dark .role-chip[data-r="C"]{background:rgba(110,220,160,.17);color:#a8ecc2;box-shadow:inset 0 0 0 1px rgba(140,230,175,.3)}
 .point.dark .who.empty{border-color:rgba(255,255,255,.3);color:#fff}
 .point.dark .pt-row{border-top-color:rgba(255,255,255,.14)}
 .point.dark .pt-edit{color:var(--cyan)}
 .point.dark .warn-tag{color:#ffd28a}
-.deep .lines-grid .point.dark:nth-child(4n+2){background:#124673} .deep .lines-grid .point.dark:nth-child(4n+3){background:#0e3a62} .deep .lines-grid .point.dark:nth-child(4n+4){background:#0b2f52}
+/* planned cards get darker the further ahead they are (--d: 0 next up → 1 furthest) */
+.deep .lines-grid .point.dark{background:color-mix(in srgb,#0b2f52 calc(var(--d,0) * 100%),#185382)}
 .deep-title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 /* points per person on a white card */
 .ppl.light h2{color:var(--ink);font-size:19px;margin:0}

@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.27.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.27.2"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -409,7 +409,7 @@
   // lines planned further ahead below it.
   function renderPointsWide(g, lines, head, card, now, plan) {
     const t = tourOf(g), st = computeStats(lines).team, starts = lineStarts(lines);
-    const cardC = (i, dark) => lineCard(lines[i], i, starts[i], restFor(g, lines, i), now && now.line === i ? now.k : -1, { lines, now, compact: true, dark });
+    const cardC = (i, dark, depth) => lineCard(lines[i], i, starts[i], restFor(g, lines, i), now && now.line === i ? now.k : -1, { lines, now, compact: true, dark, depth });
     const cut = now ? now.line + 2 : plan ? Math.min(3, lines.length) : lines.length, top = lines.map((_, i) => i).filter(i => i < cut), rest = lines.map((_, i) => i).filter(i => i >= cut);
     const whead = `<div class="game-head wide">
         ${gameTitle(g, true)}
@@ -421,7 +421,7 @@
     return `<div class="above">${whead}
         <div class="wide-grid"><div id="pointsTrack" class="lines-grid">${top.map(i => cardC(i)).join("") || '<div class="add-card"><p>No lines yet. Add one, or let Fill lines plan a few.</p></div>'}</div>
         <aside class="side card">${pointsChart(lines, true) || '<p class="muted" style="margin:0">Points per person shows up once there are lines.</p>'}</aside></div>
-      </div>${deep(rest.length ? `<div class="deep-title"><span class="eyebrow">Planned ↓ ${range}</span><span class="muted">Click a name to swap.</span></div><div class="lines-grid">${rest.map(i => cardC(i, true)).join("")}</div>`
+      </div>${deep(rest.length ? `<div class="deep-title"><span class="eyebrow">Planned ↓ ${range}</span><span class="muted">Click a name to swap.</span></div><div class="lines-grid">${rest.map((i, k) => cardC(i, true, Math.min(k / 7, 1))).join("")}</div>`
         : `<div class="deep-title"><span class="eyebrow">Planned ↓</span><span class="muted">${lines.length ? `Nothing planned after Line ${lines.length}.` : "No lines planned yet."}</span></div><button class="add-dashed" data-act="add-point">+ Add line</button>`)}`;
   }
 
@@ -503,7 +503,7 @@
       if (!x.result && !started) return "";   // a line that hasn't started: nothing to record yet
       return `<div class="pt-row"><span class="pt-n">Pt ${from + k}</span>${x.start_on ? `<span class="od">${x.start_on}</span>` : ""}${x.result ? `<span class="res ${x.result}">${resText(x)}</span>${gaText(x)}` : '<span class="muted">not played yet</span>'}<button class="pt-edit" data-act="pt-open" data-id="${pt.id}" data-k="${k}">Edit</button></div>`;
     };
-    return `<article class="point${compact ? " compact" : ""}${ctx.dark ? " dark" : ""}${played ? " played" : ""}${nowK >= 0 ? " current" : ""}" data-line="${i}">
+    return `<article class="point${compact ? " compact" : ""}${ctx.dark ? " dark" : ""}${played ? " played" : ""}${nowK >= 0 ? " current" : ""}" data-line="${i}"${ctx.dark && ctx.depth ? ` style="--d:${ctx.depth.toFixed(2)}"` : ""}>
       ${pill}
       <div class="card-head">
         ${!wide() ? `<button class="nav" data-act="go-line" data-dir="-1" aria-label="Previous line" ${i === 0 ? "disabled" : ""}>‹</button>` : ""}
