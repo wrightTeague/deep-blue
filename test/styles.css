@@ -706,3 +706,7 @@ table.stats td.z{color:var(--faint)}
 .ascii-tent.front{z-index:2}
 .tgrab{transition:transform .55s cubic-bezier(.34,1.56,.64,1);will-change:transform}
 .tgrab.held{transition:none;pointer-events:none}
+/* Phones: swipe between line cards */
+#pointsTrack{touch-action:pan-y}
+#main.tab-points{overflow-x:clip}
+#pointsTrack .swiping{will-change:transform;user-select:none;-webkit-user-select:none}
