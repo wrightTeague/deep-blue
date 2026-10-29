@@ -5,6 +5,7 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 29, 2026
 
 **Real board and test board**
+- **The swap list only shows people going to the tournament.** People marked not going used to sit at the bottom under "Not going to this tournament"; now they're not offered at all.
 - **Safer saving on bad signal and with two captains (from a full bug review).**
   - Fill lines' Undo can't delete lines once a point on them has been played, and it goes away when you switch games.
   - A slow background refresh no longer puts old data back on screen (lines vanishing after Fill, a tapped O/D reverting, getting kicked out of practice check-in).

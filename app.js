@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.29.2"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.29.3"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -1040,7 +1040,7 @@
       const item = p => `<li><button data-act="pick" data-p="${p.id}" ${taken.has(p.id) ? "disabled" : ""}><span class="mag ${p.gender || "U"}">${p.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span><span class="meta">${meta(p)}</span></button></li>`;
       const awaySet = !s.zone && !s.pod && g ? awayOf(g) : new Set();
       const sec = (gnd, t) => { const items = list.filter(p => (p.gender || "") === gnd && !awaySet.has(p.id)).map(item).join(""); return items ? `<li class="pick-group">${t}</li>${items}` : ""; };
-      const awaySec = () => { const items = list.filter(p => awaySet.has(p.id)).map(item).join(""); return items ? `<li class="pick-group">Not going to this tournament</li>${items}` : ""; };
+      // People not going to this tournament aren't offered at all.
       if (podSel) { title = "Add to " + esc(podSel.name); sub = "Tap people to add them. Done when finished."; }
       else if (s.zone) { title = "Add to " + zoneName(s.zone); }
       else if (s.current) {
@@ -1052,7 +1052,7 @@
       tools = `${s.current ? `<button class="take-off" data-act="pick-remove">Take ${esc(label(P(s.current)))} off this line</button>` : ""}
         <div class="row"><input class="line-in" id="pickQ" placeholder="Search" aria-label="Search players" value="${esc(s.q || "")}" autofocus autocomplete="off"><div class="seg inset" role="group" aria-label="Show"><button data-act="pick-f" data-v="" aria-pressed="${!f}">All</button><button data-act="pick-f" data-v="W" aria-pressed="${f === "W"}">W</button><button data-act="pick-f" data-v="M" aria-pressed="${f === "M"}">M</button></div></div>
         ${rest ? `<div class="row"><span class="muted" style="font-size:15px;font-weight:700">Sort</span><div class="seg inset" role="group" aria-label="Sort">${[["sat", "Lines sat"], ["played", "Lines played"], ["az", "A–Z"]].map(([v, t]) => `<button data-act="pick-sort" data-v="${v}" aria-pressed="${sortBy === v}">${t}</button>`).join("")}</div></div>` : ""}`;
-      body = `<ul class="pick-list">${sec("W", "Women-matching")}${sec("M", "Men-matching")}${sec("", "Matchup not set")}${awaySec()}</ul>
+      body = `<ul class="pick-list">${sec("W", "Women-matching")}${sec("M", "Men-matching")}${sec("", "Matchup not set")}</ul>
         ${list.length ? "" : '<p class="empty-note">Nobody matches.</p>'}${podSel || s.zone ? `<div style="margin-top:12px">${btns("Done", podSel ? `data-act="pod-edit" data-id="${podSel.id}"` : 'data-act="close"', false)}</div>` : ""}`;
     } else if (s.type === "point-menu") {
       const pts = gamePoints(ui.gameId), i = pts.findIndex(x => x.id === s.id), pt = pts[i], cur = pt ? playsOf(pt) : 1, played = pt && outs(pt).some(o => o.result);
