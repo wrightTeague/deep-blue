@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 29, 2026
+
+**Real board and test board**
+- **New lines play 1 point by default.** Fill lines now starts on "Each plays 1 point", and + Add line and "Paste as new line" make 1-point lines. Lines already on the board keep their points, and you can still pick 2–4 in Fill lines or a line's menu.
+
 ## Oct 27, 2026
 
 **Real board and test board**

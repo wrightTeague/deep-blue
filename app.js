@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.27.2"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.29.1"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -1026,7 +1026,7 @@
       body = `<ul class="pick-list">${sec("W", "Women-matching")}${sec("M", "Men-matching")}${sec("", "Matchup not set")}${awaySec()}</ul>
         ${list.length ? "" : '<p class="empty-note">Nobody matches.</p>'}${podSel || s.zone ? `<div style="margin-top:12px">${btns("Done", podSel ? `data-act="pod-edit" data-id="${podSel.id}"` : 'data-act="close"', false)}</div>` : ""}`;
     } else if (s.type === "point-menu") {
-      const pts = gamePoints(ui.gameId), i = pts.findIndex(x => x.id === s.id), pt = pts[i], cur = pt ? playsOf(pt) : 2, played = pt && outs(pt).some(o => o.result);
+      const pts = gamePoints(ui.gameId), i = pts.findIndex(x => x.id === s.id), pt = pts[i], cur = pt ? playsOf(pt) : 1, played = pt && outs(pt).some(o => o.result);
       const from = lineStarts(pts)[i] || 1;
       title = "Line " + (i + 1); sub = `${cur === 1 ? "Pt " + from : "Pts " + from + "–" + (from + cur - 1)} · ${played ? "played" : "not played yet"}`;
       const it = (act, t, hint) => `<button data-act="${act}">${t}${hint ? `<small>${hint}</small>` : ""}</button>`;
@@ -1231,7 +1231,7 @@
     else {
       if (opts.existing) targets = lines.map((x, i) => i).filter(i => !played(lines[i]) && (lines[i].lineup || []).length < SLOTS && !lines.slice(i + 1).some(played));
       for (let k = 0; k < (opts.newLines || 0); k++) {
-        lines.push({ id: uid(), game_id: g.id, pos: lines.length + 1, lineup: [], plays: opts.plays || 2, outcomes: [], note: "" });
+        lines.push({ id: uid(), game_id: g.id, pos: lines.length + 1, lineup: [], plays: opts.plays || 1, outcomes: [], note: "" });
         targets.push(lines.length - 1);
       }
     }
@@ -1539,7 +1539,7 @@
     const g = game(); if (!g) return;
     const pts = gamePoints(g.id);
     const lineup = srcPt ? (srcPt.lineup || []).map(x => ({ ...x })) : [];
-    const pt = { id: uid(), game_id: g.id, pos: 0, lineup, plays: srcPt ? playsOf(srcPt) : 2, outcomes: [], note: "" };
+    const pt = { id: uid(), game_id: g.id, pos: 0, lineup, plays: srcPt ? playsOf(srcPt) : 1, outcomes: [], note: "" };
     let order = pts.map(x => x.id);
     if (insertAfter) { const i = order.indexOf(srcPt.id); order.splice(i + 1, 0, pt.id); } else order.push(pt.id);
     pt.pos = order.indexOf(pt.id) + 1;
@@ -1703,7 +1703,7 @@
     if (a === "edit-delete") { if (!ui.editLines.confirm) { ui.editLines.confirm = true; render(); return; } deleteSelected(); return; }
     if (a === "undo-delete") { undoDelete(); return; }
     if (a === "undo-delete-done") { ui.undoDel = null; render(); return; }
-    if (a === "fill-open") { openSheet({ type: "fill", n: 3, plays: 2, existing: true }); return; }
+    if (a === "fill-open") { openSheet({ type: "fill", n: 3, plays: 1, existing: true }); return; }
     if (a === "fill-n") { ui.sheet.n = +el.dataset.v; renderSheet(); return; }
     if (a === "fill-pairing") { ui.pairing = el.dataset.v; store.set("pairing", ui.pairing); renderSheet(); return; }
     if (a === "fill-plays") { ui.sheet.plays = +el.dataset.v; renderSheet(); return; }
@@ -1788,7 +1788,7 @@
       patchPoint(id, x => { x.lineup = ui.clip.lineup.map(y => ({ ...y })).slice(0, SLOTS); });
       toast("Pasted"); return;
     }
-    if (a === "paste-new") { if (ui.clip) { newPointAfter({ lineup: ui.clip.lineup, plays: 2 }, false); ui.undo = null; toast("Added a pasted line"); } return; }
+    if (a === "paste-new") { if (ui.clip) { newPointAfter({ lineup: ui.clip.lineup, plays: 1 }, false); ui.undo = null; toast("Added a pasted line"); } return; }
     if (a === "undo-paste") { const u = ui.undo; if (u) { ui.undo = null; patchPoint(u.id, x => { x.lineup = u.lineup; }); toast("Paste undone"); } return; }
     if (a === "clip-done") { ui.clip = null; ui.undo = null; store.del("clip"); render(); return; }
     if (a.startsWith("pm-")) {
