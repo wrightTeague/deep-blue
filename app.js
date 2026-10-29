@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.29.1"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.29.2"; // keep in sync with version.json and the ?v= in index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -15,7 +15,14 @@
   const ZONES = [["handlers", "Handlers"], ["deep", "Deep deep"], ["short", "Short deep"]];   // each also has a "<key>_ok" list: can play it if needed
   const zoneName = k => { const ok = /_ok$/.test(k), z = ZONES.find(x => x[0] === k.replace(/_ok$/, "")); return z ? z[1] + (ok ? " (if needed)" : "") : ""; };
 
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  // On bad signal a request can hang for minutes. Give up after 15 s so the save shows as failed
+  // and later saves (and live refreshes) aren't stuck behind it.
+  const timedFetch = (url, opts = {}) => {
+    const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
+    if (opts.signal) opts.signal.addEventListener("abort", () => c.abort());
+    return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(t));
+  };
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timedFetch } });
   const TOKEN = (new URLSearchParams(location.search).get("t") || "").trim();
 
   // ---------- small helpers ----------
@@ -39,6 +46,8 @@
   let S = { team: null, tournaments: [], players: [], games: [], points: [], practices: [] };
   const ui = { tab: ((t => t === "zone" ? "roster" : t)(store.get("tab", "home"))), tourId: store.get("tourId", null), gameId: store.get("game", null), stats: { scope: store.get("statsScope", "game"), sort: "pts", tourId: store.get("statsTour", null) }, sheet: null, sync: "connecting", rosterFilter: "" };
   let pending = 0, refreshQueued = false;
+  let editSeq = 0;   // goes up with every change made on this phone (see load)
+  let gated = false; // the passcode screen is up: don't draw the board over it
   // Copied line players, kept on this device so they can be pasted into any game.
   ui.clip = store.get("clip", null);   // { lineup:[{p,r}], from:"Line 3 · vs Susquehanna" }
   ui.undo = null;                      // { id, lineup } for the last paste
@@ -61,6 +70,8 @@
   const activePlayers = () => S.players.filter(p => p.active);
   const sortPlayers = list => list.slice().sort((a, b) => (a.gender === b.gender ? 0 : a.gender === "W" ? -1 : b.gender === "W" ? 1 : 0) || label(a).localeCompare(label(b)));
 
+  // gender and badge are put into the page as-is (class names, text); keep them to known values.
+  const clean = s => { (s.players || []).forEach(p => { if (p.gender !== "W" && p.gender !== "M") p.gender = ""; if (!BADGE_NAME[p.badge]) p.badge = ""; }); return s; };
   function upsertLocal(kind, row) {
     const arr = S[kind], i = arr.findIndex(r => r.id === row.id);
     if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.push(row);
@@ -79,9 +90,14 @@
   }
 
   async function load(first) {
+    const seq = editSeq;
     try {
       const d = await rpc("app_load");
-      S = { team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [], practices: d.practices || [] };
+      // Something changed on this phone while this was on its way, so the answer is older than
+      // the screen. Drop it and ask again once the saves are in.
+      if (S.team && !gated && (seq !== editSeq || pending > 0)) { if (first) { connect(); if (OWNER) loadOwner(); } scheduleRefresh(); return true; }
+      gated = false;
+      S = clean({ team: d.team, tournaments: d.tournaments || [], players: d.players || [], games: d.games || [], points: d.points || [], practices: d.practices || [] });
       serverLines.clear(); S.points.forEach(x => serverLines.set(x.id, JSON.parse(JSON.stringify(x))));
       store.set("cache", S);
       if (!game()) ui.gameId = S.games.length ? S.games[S.games.length - 1].id : null;
@@ -95,7 +111,7 @@
         return false;
       }
       const cached = store.get("cache", null);
-      if (cached && !S.team) { S = cached; if (!game() && S.games.length) ui.gameId = S.games[S.games.length - 1].id; }
+      if (cached && !S.team) { S = clean(cached); if (!game() && S.games.length) ui.gameId = S.games[S.games.length - 1].id; }
       setSync("offline");
       if (S.team) render(); else renderGate("Couldn't reach the board. Check your connection and try again.");
       if (first && S.team) connect();
@@ -128,6 +144,7 @@
   function ping() { try { channel && channel.send({ type: "broadcast", event: "changed", payload: { at: Date.now() } }); } catch (e) {} }
 
   async function save(fn, args, optimistic) {
+    editSeq++;
     if (optimistic) optimistic();
     render();
     pending++;
@@ -239,7 +256,7 @@
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
   function render() {
-    if (!S.team) return;
+    if (!S.team || gated) return;
     if (ui.drag) { ui.drag.pending = true; return; }   // never redraw under a finger mid-drag
     if (ui.swiping) { ui.swiping.pending = true; return; }   // or mid-swipe
     const app = $("#app");
@@ -255,7 +272,7 @@
         <span class="sync ${ui.sync}" id="sync"><i></i><span>${ui.sync === "live" ? "Live" : ui.sync === "offline" ? "Offline" : "Connecting"}</span></span>
         <span class="ver" title="Board version">v${esc(APP_VERSION.replace(/^(test\.|\d{4}\.)/, ""))}</span>
       </div></header>
-      <main id="main" class="tab-${ui.tab}">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : ui.tab === "home" ? renderHome() : ui.tab === "tour" ? renderTour() : renderPoints()}</main>
+      <main id="main" class="tab-${ui.tab}${ui.tab === "points" && (ui.editLines || ui.undoDel || ui.auto || ui.clip) ? " has-bar" : ""}">${ui.tab === "stats" ? renderStats() : ui.tab === "roster" ? renderRoster() : ui.tab === "practice" ? renderPractice() : ui.tab === "home" ? renderHome() : ui.tab === "tour" ? renderTour() : renderPoints()}</main>
       ${ui.tab !== "points" ? "" : ui.editLines ? editBar() : ui.undoDel ? undoDelBar() : ui.auto ? autoBar() : ui.clip ? clipBar() : ""}
       <nav class="bottom-nav" aria-label="Sections">${tabsHTML}</nav>`;
     placeOcean();
@@ -440,7 +457,8 @@
     const line = pt.lineup || [], o = outs(pt), n = o.length, to = from + n - 1, lines = ctx.lines, compact = !!ctx.compact;
     let w = 0, m = 0; line.forEach(s => { const p = P(s.p); if (p?.gender === "W") w++; else if (p?.gender === "M") m++; });
     const caps = line.filter(s => isLead(P(s.p))).length;
-    const zs = zoneSets(), spots = DBLines.assignSpots(line.map(s => s.p), zs);
+    const zs = zoneSets(), spots = DBLines.assignSpots(line.map(s => s.p), zs), awayL = awayOf(S.games.find(x => x.id === pt.game_id));
+    const gone = id => awayL.has(id) || (P(id) && !P(id).active);
     const listed = k => zs[k].main.size + zs[k].ok.size > 0;
     const missing = line.length ? [listed("deep") && !spots.deep ? "no DD" : "", listed("short") && !spots.short ? "no SD" : ""].filter(Boolean) : [];
     const goals = new Map(), assists = new Map();
@@ -461,6 +479,7 @@
       const gN = goals.get(s.p) || 0, aN = assists.get(s.p) || 0;
       const sat = rest && rest.any ? rest.info(s.p).pts : undefined;
       const bits = [
+        gone(s.p) ? '<span class="t-b2b">not going</span>' : "",
         s.p === spots.deep ? '<span class="t-dd">DD</span>' : s.p === spots.short ? '<span class="t-sd">SD</span>' : "",
         sat === undefined ? "" : sat === null ? '<span class="t-first">1st shift</span>' : sat === 0 ? '<span class="t-b2b">back to back</span>' : `sat ${sat}`,
         gN || aN ? `<span class="t-ga">${[gN ? (gN > 1 ? gN : "") + "G" : "", aN ? (aN > 1 ? aN : "") + "A" : ""].filter(Boolean).join(" ")}</span>` : "",
@@ -474,7 +493,7 @@
         if (!s) { tiles.push(`<li><button class="who empty" data-act="pick-slot" data-id="${pt.id}" data-k="${k}">+ Add player</button></li>`); continue; }
         const p = P(s.p), r = s.r === "P" ? "C" : (s.r || ""), gN = goals.get(s.p) || 0, aN = assists.get(s.p) || 0;
         const sat = rest && rest.any ? rest.info(s.p).pts : undefined;
-        tiles.push(`<li class="prow"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}" title="${sat === undefined ? "" : sat === null ? "1st shift" : sat === 0 ? "back to back" : "sat " + sat + " pts"}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${gN || aN ? `<span class="t-ga">${[gN ? "G" : "", aN ? "A" : ""].filter(Boolean).join("")}</span>` : ""}${sat === 0 ? '<span class="t-b2b" aria-label="back to back">●</span>' : ""}<span class="grow"></span>${s.p === spots.deep ? '<span class="pos dd">DD</span>' : s.p === spots.short ? '<span class="pos sd">SD</span>' : ""}</button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change" title="Handler (H) or cutter (C): tap to switch">${r || "–"}</button></li>`);
+        tiles.push(`<li class="prow"><button class="who" data-act="pick-slot" data-id="${pt.id}" data-k="${k}" title="${sat === undefined ? "" : sat === null ? "1st shift" : sat === 0 ? "back to back" : "sat " + sat + " pts"}"><span class="mag ${p?.gender || "U"}">${p?.gender || "?"}</span><span class="nm">${esc(label(p))}${badge(p)}</span>${gN || aN ? `<span class="t-ga">${[gN ? "G" : "", aN ? "A" : ""].filter(Boolean).join("")}</span>` : ""}${sat === 0 ? '<span class="t-b2b" aria-label="back to back">●</span>' : ""}${gone(s.p) ? '<span class="warn-tag">not going</span>' : ""}<span class="grow"></span>${s.p === spots.deep ? '<span class="pos dd">DD</span>' : s.p === spots.short ? '<span class="pos sd">SD</span>' : ""}</button><button class="role-chip" data-r="${r}" data-act="role" data-id="${pt.id}" data-k="${k}" aria-label="Role: ${ROLE_NAME[r] || "none"}. Tap to change" title="Handler (H) or cutter (C): tap to switch">${r || "–"}</button></li>`);
       }
     }
     const pl = podsOnLine(line.map(s => s.p));
@@ -687,7 +706,13 @@
     if (ex) { ui.practiceId = ex.id; render(); return; }
     const x = { id: uid(), practice_date: date, attended: [], note: "" };
     ui.practiceId = x.id; ui.scrim = null;
-    await save("app_save_practice", { x }, () => { S.practices = [...(S.practices || []), x]; });
+    const v = await save("app_save_practice", { x }, () => { S.practices = [...(S.practices || []), x]; });
+    // Another phone made today's practice first: the server hands that one back. Use it.
+    if (v && v.id && v.id !== x.id) {
+      S.practices = (S.practices || []).filter(p => p.id !== x.id); upsertLocal("practices", v);
+      if (ui.practiceId === x.id) ui.practiceId = v.id;
+      render();
+    }
   }
   const markWaiting = new Map();
   async function markPractice(pid, player) {
@@ -706,14 +731,18 @@
     const v = await save("app_practice_sit_mark", { p_id: pid, p_player: player, p_on: on }, () => { pr.sitting = on ? [...cur, player] : cur.filter(id => id !== player); });
     if (Array.isArray(v)) { const x = (S.practices || []).find(y => y.id === pid); if (x) { x.sitting = v; render(); } }
   }
+  const goingWaiting = new Map();
   async function setGoing(tid, player, next) {
     const t = tours().find(x => x.id === tid); if (!t) return;
+    goingWaiting.set(tid, (goingWaiting.get(tid) || 0) + 1);
     const late = Array.isArray(t.late) ? t.late : [], away = Array.isArray(t.away) ? t.away : [];
     const v = await save("app_tournament_going_mark", { p_id: tid, p_player: player, p_state: next }, () => {
       t.late = late.filter(id => id !== player).concat(next === "late" ? [player] : []);
       t.away = away.filter(id => id !== player).concat(next === "away" ? [player] : []);
     });
-    if (v && Array.isArray(v.late)) { const x = tours().find(y => y.id === tid); if (x) { x.late = v.late; x.away = v.away || []; render(); } }
+    const left = goingWaiting.get(tid) - 1; goingWaiting.set(tid, left);
+    // Only the answer to the last tap: an earlier one would flip a chip back under the finger.
+    if (!left && v && Array.isArray(v.late)) { const x = tours().find(y => y.id === tid); if (x) { x.late = v.late; x.away = v.away || []; render(); } }
   }
   function markLate(tid, player) {
     const t = tours().find(x => x.id === tid); if (!t) return;
@@ -841,7 +870,7 @@
       ${nextT ? deep(`<span class="eyebrow">Next up ↓</span><button class="next-link" data-act="home-tour" data-id="${nextT.id}"><span class="t"><b>${esc(nextT.name)}</b><span>${fmtDay(nextT.start_date)}${nextGames ? "" : " · no games yet"}</span></span><span class="soon">${whenText(nextT.start_date)} ›</span></button>`) : ""}`;
   }
   function openGame(gid) {
-    ui.gameId = gid; store.set("game", gid); ui.swipe = null; ui.editLines = null; ui.undoDel = null;
+    ui.gameId = gid; store.set("game", gid); ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.auto = null;
     ui.tab = "points"; store.set("tab", "points"); render(); window.scrollTo(0, 0);
   }
 
@@ -1225,13 +1254,14 @@
     const pg = prevGameOf(g), prevLines = pg ? gamePoints(pg.id) : null;
     const lines = gamePoints(g.id).map(x => JSON.parse(JSON.stringify(x)));
     const played = pt => outs(pt).some(o => o.result);
+    const away = awayOf(g), here = id => !away.has(id) && !!P(id)?.active;   // not-going / Out players count as empty spots
     const before = new Map(lines.map(x => [x.id, (x.lineup || []).map(s => ({ ...s }))]));
     let targets = [];
     if (opts.only) targets = lines.map((x, i) => i).filter(i => lines[i].id === opts.only && !played(lines[i]));
     else {
-      if (opts.existing) targets = lines.map((x, i) => i).filter(i => !played(lines[i]) && (lines[i].lineup || []).length < SLOTS && !lines.slice(i + 1).some(played));
+      if (opts.existing) targets = lines.map((x, i) => i).filter(i => !played(lines[i]) && (lines[i].lineup || []).filter(s => here(s.p)).length < SLOTS && !lines.slice(i + 1).some(played));
       for (let k = 0; k < (opts.newLines || 0); k++) {
-        lines.push({ id: uid(), game_id: g.id, pos: lines.length + 1, lineup: [], plays: opts.plays || 1, outcomes: [], note: "" });
+        lines.push({ id: uid(), game_id: g.id, pos: Math.max(0, ...lines.map(l => +l.pos || 0)) + 1, lineup: [], plays: opts.plays || 1, outcomes: [], note: "" });   // after the highest position: a failed reorder can leave gaps
         targets.push(lines.length - 1);
       }
     }
@@ -1239,12 +1269,12 @@
     const o = ui.owner || { rookies: [], apart: [], together: [] };
     const notes = [], dayLines = dayGamesBefore(g).map(x => gamePoints(x.id)), usualPairs = DBLines.usualPairs(S.players, S.points);
     // Attendance nudge (lines.js tuning: +1 line sat for every practice vs none ≈ 1–2 points a day).
-    const priority = ui.useAtt ? attendancePriority(attendanceForGame(g)) : {}, late = lateOf(g), away = awayOf(g);
+    const priority = ui.useAtt ? attendancePriority(attendanceForGame(g)) : {}, late = lateOf(g);
     const going = S.players.filter(p => !away.has(p.id));
     for (const i of targets) {
       const mb = DBLines.menBehind({ players: going, lines, idx: i, dayLines });
       const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
-      const keep = (lines[i].lineup || []).map(s => s.p), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
+      const keep = (lines[i].lineup || []).map(s => s.p).filter(here), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
         players: going, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, pairing: ui.pairing, usualPairs,
         positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
@@ -1256,11 +1286,13 @@
     const created = [], changed = [];
     for (const i of targets) {
       const x = lines[i];
-      if (before.has(x.id)) { changed.push({ id: x.id, lineup: before.get(x.id) }); const cur = S.points.find(p => p.id === x.id); await savePoint({ ...cur, lineup: x.lineup }); }
+      // Through patchPoint, so it's checked against the server's copy: a line someone has
+      // recorded a result on in the meantime is left alone.
+      if (before.has(x.id)) { changed.push({ id: x.id, lineup: before.get(x.id) }); await patchPoint(x.id, pt => { if (!outs(pt).some(o => o.result)) pt.lineup = x.lineup; }); }
       else { created.push(x.id); await savePoint(x); }
     }
     const first = Math.min(...targets) + 1, last = Math.max(...targets) + 1;
-    ui.auto = { changed, created, text: `Filled ${first === last ? "Line " + first : "Lines " + first + "–" + last}.`, notes };
+    ui.auto = { gid: g.id, changed, created, text: `Filled ${first === last ? "Line " + first : "Lines " + first + "–" + last}.`, notes };
     render();
     setTimeout(() => {
       if (swipeMode()) { showLine(first - 1, true); trackOf()?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
@@ -1269,7 +1301,10 @@
   }
   async function undoAuto() {
     const u = ui.auto; if (!u) return; ui.auto = null;
-    for (const c of u.changed) { const cur = S.points.find(p => p.id === c.id); if (cur) await savePoint({ ...cur, lineup: c.lineup }); }
+    // Never undo onto a game that's moved on: once any of these lines has a result, keep them.
+    const playedNow = [...u.created, ...u.changed.map(c => c.id)].some(id => { const p = S.points.find(x => x.id === id); return p && outs(p).some(o => o.result); });
+    if (u.gid !== ui.gameId || playedNow) { render(); toast("Those lines have been played, so Fill can't be undone."); return; }
+    for (const c of u.changed) await patchPoint(c.id, pt => { if (!outs(pt).some(o => o.result)) pt.lineup = c.lineup; });
     await Promise.all(u.created.map(id => save("app_delete_point", { p_id: id }, () => removeLocal("points", id))));
     const g = game(); if (g && u.created.length) { const order = gamePoints(g.id).map(x => x.id); await save("app_reorder_points", { p_game: g.id, p_ids: order }, () => order.forEach((x, i) => { S.points.find(p => p.id === x).pos = i + 1; })); }
     render(); toast("Undone");
@@ -1486,7 +1521,7 @@
   (function setupSwipe() {
     let s = null, noClickUntil = 0;
     const SLOP = 10, track = () => document.getElementById("pointsTrack");
-    const settle = () => { const p = ui.swiping && ui.swiping.pending; ui.swiping = null; if (p) render(); };
+    const settle = () => { if (s && s.on) return; const p = ui.swiping && ui.swiping.pending; ui.swiping = null; if (p) render(); };   // a newer swipe owns it now
     document.addEventListener("pointerdown", e => {
       if (s || e.pointerType === "mouse" || wide() || ui.tab !== "points" || ui.editLines || ui.sheet) return;
       const tr = track(), el = tr && tr.firstElementChild; if (!el || !tr.contains(e.target)) return;
@@ -1498,7 +1533,7 @@
       if (!s.on) {
         if (Math.abs(dy) > SLOP && Math.abs(dy) >= Math.abs(dx)) { s = null; return; }   // a scroll
         if (Math.abs(dx) < SLOP || !s.el.isConnected) return;
-        s.on = true; ui.swiping = { pending: false }; s.el.style.transition = "none"; s.el.classList.add("swiping");
+        s.on = true; ui.swiping = { pending: !!(ui.swiping && ui.swiping.pending) }; s.el.style.transition = "none"; s.el.classList.add("swiping");   // keeps a redraw still owed from the last swipe
       }
       const g = game(), n = g ? gamePoints(g.id).length : 0, i = (ui.swipe && ui.swipe.i) || 0;
       const edge = (dx > 0 && i <= 0) || (dx < 0 && i >= n);   // nothing that way: resist
@@ -1542,9 +1577,9 @@
     const pt = { id: uid(), game_id: g.id, pos: 0, lineup, plays: srcPt ? playsOf(srcPt) : 1, outcomes: [], note: "" };
     let order = pts.map(x => x.id);
     if (insertAfter) { const i = order.indexOf(srcPt.id); order.splice(i + 1, 0, pt.id); } else order.push(pt.id);
-    pt.pos = order.indexOf(pt.id) + 1;
+    pt.pos = insertAfter ? order.indexOf(pt.id) + 1 : Math.max(0, ...pts.map(x => +x.pos || 0)) + 1;   // appended: after the highest position, which may not be the count
     upsertLocal("points", pt);
-    order.forEach((id, i) => { const x = S.points.find(p => p.id === id); if (x) x.pos = i + 1; });
+    if (insertAfter) order.forEach((id, i) => { const x = S.points.find(p => p.id === id); if (x) x.pos = i + 1; });
     savePoint(pt).then(() => { if (insertAfter) save("app_reorder_points", { p_game: g.id, p_ids: order }); });
     return pt;
   }
@@ -1574,6 +1609,7 @@
   const lineQueue = new Map(), lineWaiting = new Map();
   function patchPoint(id, fn) {
     const pt = S.points.find(x => x.id === id); if (!pt) return;
+    editSeq++;
     upsertLocal("points", buildLine(pt, fn)); render();   // show it now
     lineWaiting.set(id, (lineWaiting.get(id) || 0) + 1);
     const run = async () => {
@@ -1636,6 +1672,9 @@
   document.addEventListener("click", e => {
     const el = e.target.closest("[data-act]"); if (!el) return;
     const a = el.dataset.act, id = el.dataset.id;
+    // The scorer grid / next point's O-D appear right where "We scored" / "They scored" was, so a
+    // nervous double tap would answer them. Ignore a recording tap within 400 ms of the last one.
+    if (/^(result|set-goal|set-assist|od|ga-change)$/.test(a)) { if (Date.now() - (ui.lastRec || 0) < 400) return; ui.lastRec = Date.now(); }
     if (a === "scrim") { if (e.target === el) closeSheet(); return; }
     if (a === "close") { closeSheet(); return; }
     if (a === "tab") { ui.tab = el.dataset.tab; store.set("tab", ui.tab); render(); window.scrollTo(0, 0); return; }
@@ -1657,11 +1696,15 @@
       return;
     }
     if (a === "add-point") { closeSheet(); const pts = gamePoints(ui.gameId); newPointAfter(null, false); if (swipeMode()) showLine(pts.length); else setTimeout(() => { const cards = document.querySelectorAll(".point"); cards[cards.length - 1]?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 50); return; }
-    if (a === "role") { const k = +el.dataset.k; patchPoint(id, pt => { const s = pt.lineup[k]; if (s) { const cur = s.r === "P" ? "C" : (s.r || ""); s.r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length]; } }); return; }
-    if (a === "od") { const k = +el.dataset.k; patchPoint(id, pt => { const o = pt.outcomes[k]; o.start_on = o.start_on === el.dataset.v ? "" : el.dataset.v; }); return; }
+    // Toggles are worked out from what this phone shows, and saved as the value to set: patchPoint
+    // re-applies a change to the server's newer copy, and a toggle there would flip the other way.
+    if (a === "role") { const s0 = (S.points.find(x => x.id === id)?.lineup || [])[+el.dataset.k]; if (!s0) return;
+      const cur = s0.r === "P" ? "C" : (s0.r || ""), r = ROLES[(ROLES.indexOf(cur) + 1) % ROLES.length];
+      patchPoint(id, pt => { const s = (pt.lineup || []).find(x => x.p === s0.p); if (s) s.r = r; }); return; }
+    if (a === "od") { const k = +el.dataset.k, v = outs(S.points.find(x => x.id === id))[k].start_on === el.dataset.v ? "" : el.dataset.v; patchPoint(id, pt => { pt.outcomes[k].start_on = v; }); return; }
     if (a === "go-line") { const cur = (ui.swipe && ui.swipe.i) || 0; showLine(el.dataset.dir ? cur + +el.dataset.dir : +el.dataset.i); if (!el.dataset.dir) window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     if (a === "games") { openSheet({ type: "games" }); return; }
-    if (a === "pick-game") { closeSheet(); ui.stats.tourId = null; store.del("statsTour"); ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.gameId = id; store.set("game", id); render(); window.scrollTo(0, 0); return; }
+    if (a === "pick-game") { closeSheet(); ui.stats.tourId = null; store.del("statsTour"); ui.swipe = null; ui.editLines = null; ui.undoDel = null; ui.auto = null; ui.gameId = id; store.set("game", id); render(); window.scrollTo(0, 0); return; }
     if (a === "pt-open") { const k = id + ":" + el.dataset.k; ui.openPt = ui.openPt === k ? null : k; render(); return; }
     if (a === "jump-now") { jumpNow(); return; }
     if (a === "result") {
@@ -1785,7 +1828,8 @@
     if (a === "paste-line") {
       const pt = S.points.find(x => x.id === id); if (!pt || !ui.clip) return;
       ui.undo = { id, lineup: JSON.parse(JSON.stringify(pt.lineup || [])) };
-      patchPoint(id, x => { x.lineup = ui.clip.lineup.map(y => ({ ...y })).slice(0, SLOTS); });
+      const lu = ui.clip.lineup.map(y => ({ ...y })).slice(0, SLOTS);   // now: Done may clear the clipboard before this saves
+      patchPoint(id, x => { x.lineup = lu.map(y => ({ ...y })); });
       toast("Pasted"); return;
     }
     if (a === "paste-new") { if (ui.clip) { newPointAfter({ lineup: ui.clip.lineup, plays: 1 }, false); ui.undo = null; toast("Added a pasted line"); } return; }
@@ -1793,6 +1837,12 @@
     if (a === "clip-done") { ui.clip = null; ui.undo = null; store.del("clip"); render(); return; }
     if (a.startsWith("pm-")) {
       const pid = ui.sheet.id, pt = S.points.find(x => x.id === pid);
+      // Clear results / Clear players / fewer points erase recorded points (players cleared take
+      // their goals and assists with them): ask for a second tap, like Delete.
+      const kept = a === "pm-plays" ? +el.dataset.v : a === "pm-clear-result" || a === "pm-clear" ? 0 : null;
+      if (pt && kept !== null && outs(pt).slice(kept).some(o => o.result) && ui.sheet.arm !== a + el.dataset.v) {
+        ui.sheet.arm = a + el.dataset.v; renderSheet(); toast("That erases recorded points. Tap again to do it.", 3000); return;
+      }
       if (a === "pm-delete") {
         if (!ui.sheet.confirm) { ui.sheet.confirm = true; renderSheet(); return; }
         closeSheet();
@@ -1970,6 +2020,7 @@
 
   // ---------- gate ----------
   function renderGate(msg) {
+    if (TOKEN && CODE === "") gated = true;
     ui.sheet = null; renderSheet();
     const sea = asciiOn() ? `<div class="gate-sea ascii"><canvas id="gateSeaCv" aria-hidden="true"></canvas><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div>`
       : `<div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div>`;
@@ -1993,7 +2044,7 @@
   else if (!CODE) renderGate();
   else {
     const cached = store.get("cache", null);
-    if (cached) { S = cached; if (!game() && S.games.length) ui.gameId = S.games[S.games.length - 1].id; render(); }
+    if (cached) { S = clean(cached); if (!game() && S.games.length) ui.gameId = S.games[S.games.length - 1].id; render(); }
     load(true);
   }
 })();

@@ -5,6 +5,21 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Oct 29, 2026
 
 **Real board and test board**
+- **Safer saving on bad signal and with two captains (from a full bug review).**
+  - Fill lines' Undo can't delete lines once a point on them has been played, and it goes away when you switch games.
+  - A slow background refresh no longer puts old data back on screen (lines vanishing after Fill, a tapped O/D reverting, getting kicked out of practice check-in).
+  - A request that hangs gives up after 15 seconds, so later saves and live updates aren't stuck behind it.
+  - Clear results, Clear players, and dropping a line to fewer points ask for a second tap when they'd erase a recorded point.
+  - Fill lines no longer overwrites a result another captain just recorded.
+  - If the team passcode changes, other phones now show the passcode screen instead of silently not saving.
+  - Two captains tapping O/D or a role chip at the same moment no longer cancel each other out.
+  - People marked not going (or Out) who are still on a planned line get a "not going" tag, and Fill lines treats their spot as empty.
+  - Who's going on slow signal no longer flips a name back after you tap it.
+  - A quick double tap on We scored / They scored no longer picks the scorer or turns off the next point's O.
+  - Paste then Done right away no longer loses the paste.
+  - Two phones opening today's practice at the same time share one practice instead of making two.
+  - Fill lines picks the zone spot with the fewest people listed first, so it sends fewer people back to back.
+  - The Fill / Copied bar no longer covers the bottom of Points, and a long tournament name no longer makes Stats scroll sideways.
 - **New lines play 1 point by default.** Fill lines now starts on "Each plays 1 point", and + Add line and "Paste as new line" make 1-point lines. Lines already on the board keep their points, and you can still pick 2–4 in Fill lines or a line's menu.
 
 ## Oct 27, 2026

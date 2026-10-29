@@ -707,5 +707,10 @@ table.stats td.z{color:var(--faint)}
 .deep .deep-card.darker .zchip{background:rgba(15,59,94,.6)}
 /* Phones: swipe between line cards */
 #pointsTrack{touch-action:pan-y}
+/* The Fill / Copied / Edit bar sits above the nav: leave room so the end of the page can scroll out from under it. */
+.has-bar .deep{padding-bottom:calc(var(--nav-h) + 110px + env(safe-area-inset-bottom,0px))}
+/* Stats "Tournament › Game" pill: a long tournament name shrinks instead of widening the page. */
+.ctx-pick{min-width:0}
+.ctx-pick span{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
 #main.tab-points{overflow-x:clip}
 #pointsTrack .swiping{will-change:transform;user-select:none;-webkit-user-select:none}

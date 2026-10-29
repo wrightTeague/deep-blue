@@ -196,6 +196,10 @@
       ["deep", "deep deep", () => (dShort().deep ? 0 : 1), 1],
       ["short", "short deep", () => (dShort().short ? 0 : 1), 1],
     ];
+    // Most constrained spot first (fewest people listed): filling handlers first can use up the
+    // last W or M slot that the only rested short deep needed, and then someone goes back to back.
+    const listed = k => (pos[k] ? active.filter(p => inList(k, p.id)).length : Infinity);
+    needs.sort((a, b) => listed(a[0]) - listed(b[0]));
     for (const [k, name, missing] of needs) {
       if (!pos[k] || !((pos[k].main && pos[k].main.size) || (pos[k].ok && pos[k].ok.size))) continue;
       const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
