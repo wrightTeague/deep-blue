@@ -1,0 +1,128 @@
+=== repro-double-tap.js
+REPRODUCED: Double tap 'We scored' also records a scorer
+  under the finger after tap 1: "set-goal WAva"; server: [{"start_on":"","result":"us","scorer":"w0","assist":null}]
+REPRODUCED: Double tap 'They scored' on a 2-point line turns off the auto 'start on O' for Pt 2
+  under the finger after tap 1: "od O"; server: [{"result":"them","start_on":""},{"result":"","start_on":""}] (a single tap leaves Pt 2 on O)
+=== repro-fill-overwrites-result.js
+server Line 1 after A: [{"start_on":"","result":"them","scorer":null,"assist":null}]
+REPRODUCED: Fill lines on a slightly stale phone erases the result another captain recorded
+  server Line 1 outcomes now [], lineup 7 players; B saved: [{"id":"p1","outcomes":[]}]
+=== repro-fill-vanishes.js
+REPRODUCED: Freshly filled lines vanish from the phone
+  lines on A right after Fill: 5; after the slow reload: 2; on server: 5
+REPRODUCED: Filling again saves the new lines twice
+  server lines: 8, pos=[1,2,3,3,4,4,5,5]
+=== repro-going-taps.js
+tap 1: Eve: late
+tap 2: Eve: not going
+answer 1 lands: Eve: late
+tap 3 (meant: back to going): Eve: not going
+settled: Eve: not going
+REPRODUCED: Older answer flips the chip back and tap 3 lands on 'not going' instead of 'going'
+  server after 3 taps: not going (going -> late -> not going -> going expected)
+=== repro-hung-request.js
+REPRODUCED: 18 s later: goal + scorer + assist shown on A still not on the server; header still Live
+  A sent 2 app_save_point call(s): the hung Line 1 save and Line 2's automatic start-on (Line 1's result/scorer/assist are queued behind the hung one); server Line 1 outcomes=[]; A header class="sync live"; A score shows 1–0
+REPRODUCED: A stops picking up B's changes (refresh waits on pending>0 forever)
+  A app_load calls after B's change: 0; server Line 2 slot 1 role="H", A still shows role ""
+=== repro-not-going-on-line.js
+sheet says: Everyone starts as going. Tap a name to cycle: going → late sign-up → not going. Lines and Fill lines leave out anyone n
+server away: [ 'w2' ]
+Line 1 shows: AvaC, AbeC, Cleo, Eli, Fay, Ike, Lou
+REPRODUCED: Not-going player stays on Line 1; no warning; Fill leaves her there
+  Cleo on server Line 1: true; Fill toast: "Nothing to fill: every line is full or already played."
+chart: Planned this game, all 23 players (24 active)
+=== repro-offline-checkin.js
+REPRODUCED: Check-ins shown while offline, then silently dropped
+  "here" count while offline: 4 (header sync offline); server attended: []; after signal returns: 0
+=== repro-one-tap-wipes.js
+REPRODUCED: Clear players: one tap, goals left 0/2, undo offered: false
+  [{"start_on":"O","result":"us","scorer":null,"assist":null},{"start_on":"D","result":"us","scorer":null,"assist":null}]
+REPRODUCED: Plays → 1: one tap, goals left 1/2, undo offered: false
+  [{"start_on":"O","result":"us","scorer":"w2","assist":"m4"}]
+REPRODUCED: Clear results: one tap, goals left 0/2, undo offered: false
+  [{"start_on":"","result":"","scorer":null,"assist":null},{"start_on":"","result":"","scorer":null,"assist":null}]
+=== repro-passcode-change.js
+REPRODUCED: Passcode screen is replaced by the board right away; the tap silently reverts
+  passcode form visible: false; board visible: true; score shown: 0–0 (the "They scored" was dropped); passcode form 2.3 s later: false; toast: ""
+=== repro-paste-done.js
+REPRODUCED: Pasted players shown, then silently gone; never saved
+  shown right after Paste: 7 players; server Line 2: 3 players; screen now: 3; page errors: ["TypeError: Cannot read properties of null (reading 'lineup')"]
+=== repro-refresh-race.js
+REPRODUCED: Old refresh answer overwrites a saved tap on screen
+  server start_on=O; O pressed right after tap=true; O pressed after the slow refresh landed=false
+REPRODUCED: Re-tapping O then clears it on the server (toggle applied to the newer copy)
+  server start_on after 2nd tap="", O shown pressed=false, calls: app_load, app_load, app_save_point, app_save_point(stale), app_load, app_save_point
+page errors: []
+=== repro-two-captains-fill.js
+REPRODUCED: Duplicate positions and identical back-to-back lines
+  8 lines; pos=[1,2,3,3,4,4,5,5]; identical neighbouring lineups: 3
+A's line list now: Line 4 | Line 5 | Line 6 | Line 7 | Line 8 | Line 2 | Line 1
+=== repro-two-captains-toggle.js
+REPRODUCED: Two captains both tap O: point ends with no O/D
+  server start_on=""; B calls: app_load, app_load, app_save_point(stale), app_load, app_save_point
+REPRODUCED: Two captains both tap H on the same player: player ends up C
+  server role="C"
+=== repro-two-practices.js
+server practices after both taps: [{"id":"24d0b6c9","date":"2026-10-29"},{"id":"c0a82f3b","date":"2026-10-29"}]
+B still in its check-in: false
+REPRODUCED: Two practices for today, check-ins split between them
+  2 practices dated today: [["w3","w4","m5","w6","m7","m8"],[]]; attendance card: "so far · 2 practices. The best attendance starts the next to"; top row: "Dina1/2"
+=== repro-undo-fill.js
+lines after Fill: 3
+played lines on server: 2 [ 'us/m2', 'them' ]
+bottom bar still showing: Filled Lines 1–3. Line 3: Back to back: 1 UndoDone
+REPRODUCED: Undo after playing deletes played lines (and their goals)
+  server lines in game 1 after Undo: 0; points recorded before Undo: 2
+now on "vs Swarthmore ▾", bar: Filled Lines 1–3. Line 3: Back to back: 1 UndoDone
+REPRODUCED: Undo shown on another game deletes the first game's lines
+  game 1 lines before: 3, after tapping Undo while viewing game 2: 0
+=== repro-zone-lost-update.js
+REPRODUCED: First captain's zone change is wiped by the second
+  server handlers=["w2","w3","m4","m5","m6"] deep=["m8","w5","w9"]
+=== check-bar-covers.js
+REPRODUCED: Bottom of the page can't be scrolled out from under the bar
+  {"barTop":704,"barH":64,"hidden":["1 pt 21 9W · 12M","Fewest planned: Jo, Kai, Hal, 0 pts each"]}
+=== check-layout-390.js
+ok       points: scrollWidth=390
+ok       points line 1 (played): scrollWidth=390
+ok       home: scrollWidth=390
+ok       practice: scrollWidth=390
+OVERFLOW stats: scrollWidth=687 | span. right=668 ; i. right=687
+ok       roster: scrollWidth=390
+ok       tournament page: scrollWidth=390
+ok       game menu: scrollWidth=390
+ok       fill sheet: scrollWidth=390
+ok       who's going sheet: scrollWidth=390
+OVERFLOW player picker: scrollWidth=390 | button.take-off right=492
+ok       line menu: scrollWidth=390
+ok       games list: scrollWidth=390
+ok       edit lines: scrollWidth=390
+=== check-stats-390.js
+ok       "Fall Classic › vs Haverford" (24 chars): page scrollWidth=390, pill right edge=269
+ok       "Mid-Atlantic Sectionals › vs Johns Hopkins" (39 chars): page scrollWidth=390, pill right edge=374
+ok       "Conference Championships › vs Swarthmore (quarters)" (48 chars): page scrollWidth=390, pill right edge=374
+ok       "Philly Fall Invite › vs Salisbury" (30 chars): page scrollWidth=390, pill right edge=296
+ok       "Mid-Atlantic Conference Championships › vs Delaware" (48 chars): page scrollWidth=390, pill right edge=374
+OVERFLOW "Atlantic Coast Open: D-III Women's and Men's › vs TCNJ" (51 chars): page scrollWidth=414, pill right edge=374
+=== check-swipe.js
+sanity: Basic swipe left/right works: true Line 1 -> Line 2 -> Line 1
+REPRODUCED: Live change from another phone never shows after two quick short swipes
+  server role=H; A reloaded 1x; A's chip still shows "–" 1.5 s later
+  4.5 s later: chip shows –
+  after tapping the Points tab (full redraw): chip shows H
+=== check-xss-gender.js
+REPRODUCED: Crafted gender value runs script (needs a hand-made RPC call)
+  window.__xss=gender
+=== check-xss.js
+not reproduced: Script from a typed name runs somewhere
+  {"ran":null,"injectedElements":0,"visited":"points, swap sheet, close, played line, copy line, game menu, fill sheet, who's going, new player sheet, games sheet, edit game, home, practice, stats, roster, player sheet, tournament page, edit tournament, practice open, edit lines"}
+=== sim-fairness.js (line maker, ../lines.js)
+{
+  lines: 11700,
+  backToBackPlacements: 1043,
+  perGame: 1.16,
+  wrongRatioFullLines: 0,
+  shortLines: 0,
+  avgSpreadNonLeaderPts: 15.19
+}

@@ -1,0 +1,128 @@
+patched copy: <temp copy>
+=== repro-double-tap.js
+not reproduced: Double tap 'We scored' also records a scorer
+  under the finger after tap 1: "set-goal WAva"; server: [{"start_on":"","result":"us","scorer":null,"assist":null}]
+not reproduced: Double tap 'They scored' on a 2-point line turns off the auto 'start on O' for Pt 2
+  under the finger after tap 1: "od O"; server: [{"result":"them","start_on":""},{"result":"","start_on":"O"}] (a single tap leaves Pt 2 on O)
+=== repro-fill-overwrites-result.js
+server Line 1 after A: [{"start_on":"","result":"them","scorer":null,"assist":null}]
+not reproduced: Fill lines on a slightly stale phone erases the result another captain recorded
+  server Line 1 outcomes now [{"start_on":"","result":"them","scorer":null,"assist":null}], lineup 6 players; B saved: [{"id":"p1","expect":"2026-10-29T18:43:05.088Z","outcomes":[{"start_on":"","result":"","scorer":null,"assist":null}]},{"id":"p1","expect":"2026-10-29T18:44:05.089Z","outcomes":[{"start_on":"","result":"them","scorer":null,"assist":null}]}]
+=== repro-fill-vanishes.js
+not reproduced: Freshly filled lines vanish from the phone
+  lines on A right after Fill: 5; after the slow reload: 5; on server: 5
+not reproduced: Filling again saves the new lines twice
+  the lines stayed on screen, so there's no reason to fill again
+=== repro-going-taps.js
+tap 1: Eve: late
+tap 2: Eve: not going
+answer 1 lands: Eve: not going
+tap 3 (meant: back to going): Eve: going
+settled: Eve: going
+not reproduced: Older answer flips the chip back and tap 3 lands on 'not going' instead of 'going'
+  server after 3 taps: going (going -> late -> not going -> going expected)
+=== repro-hung-request.js
+not reproduced: 18 s later: goal + scorer + assist shown on A still not on the server; header still Live
+  A sent 5 app_save_point call(s): the hung Line 1 save and Line 2's automatic start-on (Line 1's result/scorer/assist are queued behind the hung one); server Line 1 outcomes=[{"start_on":"","result":"us","scorer":"w0","assist":"m0"}]; A header class="sync live"; A score shows 1–0
+not reproduced: A stops picking up B's changes (refresh waits on pending>0 forever)
+  A app_load calls after B's change: 1; server Line 2 slot 1 role="H", A still shows role ""
+=== repro-not-going-on-line.js
+sheet says: Everyone starts as going. Tap a name to cycle: going → late sign-up → not going. Lines and Fill lines leave out anyone n
+server away: [ 'w2' ]
+Line 1 shows: AvaC, AbeC, Cleo, Eli, Fay, Ike, Lou
+not reproduced: Not-going player stays on Line 1; no warning; Fill leaves her there
+  Cleo on server Line 1: false; Fill toast: ""
+chart: Planned this game, all 23 players (24 active)
+=== repro-offline-checkin.js
+REPRODUCED: Check-ins shown while offline, then silently dropped
+  "here" count while offline: 4 (header sync offline); server attended: []; after signal returns: 0
+=== repro-one-tap-wipes.js
+not reproduced: Clear players: one tap, goals left 2/2, undo offered: false
+  [{"start_on":"O","result":"us","scorer":"w2","assist":"m4"},{"start_on":"D","result":"us","scorer":"m8","assist":"w0"}]
+not reproduced: Plays → 1: one tap, goals left 2/2, undo offered: false
+  [{"start_on":"O","result":"us","scorer":"w2","assist":"m4"},{"start_on":"D","result":"us","scorer":"m8","assist":"w0"}]
+not reproduced: Clear results: one tap, goals left 2/2, undo offered: false
+  [{"start_on":"O","result":"us","scorer":"w2","assist":"m4"},{"start_on":"D","result":"us","scorer":"m8","assist":"w0"}]
+=== repro-passcode-change.js
+not reproduced: Passcode screen is replaced by the board right away; the tap silently reverts
+  passcode form visible: true; board visible: false; score shown: null (the "They scored" was dropped); passcode form 2.3 s later: true; toast: ""
+=== repro-paste-done.js
+not reproduced: Pasted players shown, then silently gone; never saved
+  shown right after Paste: 7 players; server Line 2: 7 players; screen now: 7; page errors: []
+=== repro-refresh-race.js
+not reproduced: Old refresh answer overwrites a saved tap on screen
+  server start_on=O; O pressed right after tap=true; O pressed after the slow refresh landed=true
+not reproduced: Re-tapping O then clears it on the server (toggle applied to the newer copy)
+  O still shows selected, so there's no reason to tap again
+=== repro-two-captains-fill.js
+REPRODUCED: Duplicate positions and identical back-to-back lines
+  8 lines; pos=[1,2,3,3,4,4,5,5]; identical neighbouring lineups: 3
+A's line list now: Line 4 | Line 5 | Line 6 | Line 7 | Line 8 | Line 2 | Line 1
+=== repro-two-captains-toggle.js
+not reproduced: Two captains both tap O: point ends with no O/D
+  server start_on="O"; B calls: app_load, app_load, app_save_point(stale), app_load, app_save_point, app_load
+not reproduced: Two captains both tap H on the same player: player ends up C
+  server role="H"
+=== repro-two-practices.js
+server practices after both taps: [{"id":"7fd6d770","date":"2026-10-29"},{"id":"9bb68eee","date":"2026-10-29"}]
+B still in its check-in: true
+REPRODUCED: Two practices for today, check-ins split between them
+  2 practices dated today: [["w3","w4","m5"],["w6","m7","m8"]]; attendance card: "so far · 2 practices. The best attendance starts the next to"; top row: "Dina1/2"
+=== repro-undo-fill.js
+lines after Fill: 3
+played lines on server: 2 [ 'us/m2', 'them' ]
+bottom bar still showing: Filled Lines 1–3. Swap anyone you want. UndoDone
+not reproduced: Undo after playing deletes played lines (and their goals)
+  server lines in game 1 after Undo: 3; points recorded before Undo: 2
+now on "vs Swarthmore ▾", bar: (no bar)
+not reproduced: Undo shown on another game deletes the first game's lines
+  game 1 lines before: 3, after tapping Undo while viewing game 2: 3
+=== repro-zone-lost-update.js
+REPRODUCED: First captain's zone change is wiped by the second
+  server handlers=["w2","w3","m4","m5","m6"] deep=["m8","w5","w9"]
+=== check-bar-covers.js
+not reproduced: Bottom of the page can't be scrolled out from under the bar
+  {"barTop":704,"barH":64,"hidden":[]}
+=== check-layout-390.js
+ok       points: scrollWidth=390
+ok       points line 1 (played): scrollWidth=390
+ok       home: scrollWidth=390
+ok       practice: scrollWidth=390
+ok       stats: scrollWidth=390
+ok       roster: scrollWidth=390
+ok       tournament page: scrollWidth=390
+ok       game menu: scrollWidth=390
+ok       fill sheet: scrollWidth=390
+ok       who's going sheet: scrollWidth=390
+OVERFLOW player picker: scrollWidth=390 | button.take-off right=492
+ok       line menu: scrollWidth=390
+ok       games list: scrollWidth=390
+ok       edit lines: scrollWidth=390
+=== check-stats-390.js
+ok       "Fall Classic › vs Haverford" (24 chars): page scrollWidth=390, pill right edge=269
+ok       "Mid-Atlantic Sectionals › vs Johns Hopkins" (39 chars): page scrollWidth=390, pill right edge=374
+ok       "Conference Championships › vs Swarthmore (quarters)" (48 chars): page scrollWidth=390, pill right edge=374
+ok       "Philly Fall Invite › vs Salisbury" (30 chars): page scrollWidth=390, pill right edge=296
+ok       "Mid-Atlantic Conference Championships › vs Delaware" (48 chars): page scrollWidth=390, pill right edge=374
+ok       "Atlantic Coast Open: D-III Women's and Men's › vs TCNJ" (51 chars): page scrollWidth=390, pill right edge=374
+=== check-swipe.js
+sanity: Basic swipe left/right works: true Line 1 -> Line 2 -> Line 1
+not reproduced: Live change from another phone never shows after two quick short swipes
+  server role=H; A reloaded 1x; A's chip still shows "H" 1.5 s later
+  4.5 s later: chip shows H
+  after tapping the Points tab (full redraw): chip shows H
+=== check-xss-gender.js
+not reproduced: Crafted gender value runs script (needs a hand-made RPC call)
+  window.__xss=undefined
+=== check-xss.js
+not reproduced: Script from a typed name runs somewhere
+  {"ran":null,"injectedElements":0,"visited":"points, swap sheet, close, played line, copy line, game menu, fill sheet, who's going, new player sheet, games sheet, edit game, home, practice, stats, roster, player sheet, tournament page, edit tournament, practice open, edit lines"}
+=== sim-fairness.js (line maker, <temp copy>/lines.js)
+{
+  lines: 11700,
+  backToBackPlacements: 162,
+  perGame: 0.18,
+  wrongRatioFullLines: 0,
+  shortLines: 0,
+  avgSpreadNonLeaderPts: 13.74
+}
