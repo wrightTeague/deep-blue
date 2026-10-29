@@ -1,7 +1,8 @@
 // Every page and sheet at 390 px wide with the longest names the inputs allow (nickname 30,
 // game / tournament / location 80). Reports horizontal page overflow and elements sticking out.
 const H = require("./harness");
-const SP = process.env.SP || ".";
+const SP = process.env.SP || require("path").join(__dirname, "shots");   // screenshots (git-ignored)
+require("fs").mkdirSync(SP, { recursive: true });
 const L = [["w0","m0","w2","m4","w5","m8","m11"], ["w1","m1","w3","m5","w6","m9","m12"]];
 (async () => {
   const server = await H.startServer(8783);

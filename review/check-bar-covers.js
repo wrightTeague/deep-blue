@@ -18,7 +18,7 @@ const L = [["w0","m0","w2","m4","w5","m8","m11"], ["w1","m1","w3","m5","w6","m9"
       const hidden = items.filter(el => { const b = el.getBoundingClientRect(); return b.bottom > bar.top + 4 && b.top < bar.bottom; }).map(el => el.textContent.replace(/\s+/g, " ").trim().slice(0, 40));
       return { barTop: Math.round(bar.top), barH: Math.round(bar.height), hidden };
     });
-    await A.screenshot({ path: (process.env.SP || ".") + "/bar-covers.png" });
+    await A.screenshot({ path: (process.env.SP || (require("fs").mkdirSync(require("path").join(__dirname, "shots"), { recursive: true }), require("path").join(__dirname, "shots"))) + "/bar-covers.png" });
     H.report("Bottom of the page can't be scrolled out from under the bar", r.hidden.length > 0, r);
   } finally { await browser.close(); server.stop(); }
 })();

@@ -13,7 +13,7 @@ const L = [["w0","m0","w2","m4","w5","m8","m11"]];
       const A = await H.openBoard(browser, be, server, { name: tn, store: { tab: "stats" } });
       const r = await A.evaluate(() => ({ sw: document.documentElement.scrollWidth, pill: Math.round(document.querySelector(".ctx-pick").getBoundingClientRect().right) }));
       console.log(`${r.sw > 390 ? "OVERFLOW" : "ok      "} "${tn} › ${gn}" (${(tn + gn).length} chars): page scrollWidth=${r.sw}, pill right edge=${r.pill}`);
-      if (r.sw > 390 && !process.env.SHOT) { process.env.SHOT = 1; await A.screenshot({ path: (process.env.SP || ".") + "/stats-overflow.png" }); }
+      if (r.sw > 390 && !process.env.SHOT) { process.env.SHOT = 1; await A.screenshot({ path: (process.env.SP || (require("fs").mkdirSync(require("path").join(__dirname, "shots"), { recursive: true }), require("path").join(__dirname, "shots"))) + "/stats-overflow.png" }); }
       await A.ctx.close();
     }
   } finally { await browser.close(); server.stop(); }

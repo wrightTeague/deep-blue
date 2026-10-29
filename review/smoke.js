@@ -9,7 +9,7 @@ const H = require("./harness");
     console.log("sync:", await page.$eval("#sync", e => e.className));
     console.log("names:", await H.lineNames(page));
     console.log("rpcs:", be.log.map(e => e.fn));
-    await page.screenshot({ path: process.env.SP + "/smoke.png", fullPage: false });
+    await page.screenshot({ path: (process.env.SP || (require("fs").mkdirSync(require("path").join(__dirname, "shots"), { recursive: true }), require("path").join(__dirname, "shots"))) + "/smoke.png", fullPage: false });
     console.log("errors:", page.errors || []);
   } finally { await browser.close(); server.stop(); }
 })();
