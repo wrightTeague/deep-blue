@@ -1,6 +1,7 @@
-/* Deep Blue playing-time simulator (test board only). Its own page, sim.html, linked quietly from
-   the bottom of Roster. It runs Fill lines (DBLines.simDay in lines.js) over one whole tournament
-   day under two setups, A and B, and compares the points each person would play.
+/* Deep Blue playing-time simulator. Its own page, sim.html, linked quietly from the bottom of
+   Roster. The same file runs on both boards; test/sim.html marks itself data-board="test".
+   It runs Fill lines (DBLines.simDay in lines.js) over one whole tournament day under two
+   setups, A and B, and compares the points each person would play.
    Read-only: it loads the board with the passcode already saved on this phone and never saves
    anything to the team. It only writes this phone's own settings (its own, and Fill lines' when
    you tap "Use B in Fill lines"). The Fill lines inputs below mirror autoFill in app.js; keep the
@@ -10,6 +11,8 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
+  const TEST = document.documentElement.dataset.board === "test";
+  const TAG = TEST ? ' <span class="test-tag">TEST</span>' : "", BOARD = TEST ? "test board" : "board";
   const BADGE_NAME = { C: "Captain", P: "President" };
   const ZONES = ["handlers", "deep", "short"];
   const MAX_GAMES = 8, PPG_MIN = 5, PPG_MAX = 25;
@@ -306,17 +309,17 @@
   }
 
   function gate(msg, btn) {
-    $("#app").innerHTML = `<div class="gate"><div class="gate-card"><span class="gate-logo">${LOGO}</span><h1>Playing time <span class="test-tag">TEST</span></h1><p>${msg}</p>${btn || ""}</div><div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div></div>`;
+    $("#app").innerHTML = `<div class="gate"><div class="gate-card"><span class="gate-logo">${LOGO}</span><h1>Playing time${TAG}</h1><p>${msg}</p>${btn || ""}</div><div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div></div>`;
   }
 
   function render() {
-    if (!TOKEN) return gate("This page needs the test board's team link. Open it from the bottom of Roster on the test board.");
-    if (!CODE || problem === "code") return gate("Open the test board on this phone and enter the passcode there first, then come back.", `<a class="btn primary" href="${esc(boardHref())}">Open the test board</a>`);
+    if (!TOKEN) return gate(`This page needs the ${BOARD}'s team link. Open it from the bottom of Roster on the ${BOARD}.`);
+    if (!CODE || problem === "code") return gate(`Open the ${BOARD} on this phone and enter the passcode there first, then come back.`, `<a class="btn primary" href="${esc(boardHref())}">Open the ${BOARD}</a>`);
     if (!S) return gate(problem === "net" ? "Couldn't reach the board. Check your connection and try again." : "Loading…", problem === "net" ? '<button class="btn primary" data-act="retry">Try again</button>' : "");
     restoreWho();
     // Keep keyboard focus on the same control across the redraw.
     const f = document.activeElement, sig = f && f.dataset && f.dataset.act ? ["act", "side", "k", "v", "id"].map(k => f.dataset[k] || "").join("|") : null;
-    const head = `<header class="top"><div class="top-in"><a class="brand" href="${esc(boardHref())}" aria-label="Deep Blue, back to the board">${LOGO}<span>Deep Blue</span> <span class="test-tag">TEST</span></a>${offline ? '<span class="sync offline" style="margin-left:auto"><i></i><span>Offline</span></span>' : ""}</div></header>`;
+    const head = `<header class="top"><div class="top-in"><a class="brand" href="${esc(boardHref())}" aria-label="Deep Blue, back to the board">${LOGO}<span>Deep Blue</span>${TAG}</a>${offline ? '<span class="sync offline" style="margin-left:auto"><i></i><span>Offline</span></span>' : ""}</div></header>`;
     const t = currentTour();
     let body;
     if (!t) body = `<div class="above"><a class="back-link" href="${esc(boardHref())}">‹ Board</a><h1 class="page-title">Playing time</h1><p class="empty-note">No tournaments yet. Add one on the board's Home, then come back.</p></div>`;
@@ -372,7 +375,7 @@
       const b = ui.B;
       store.set("fillCaps", b.caps); store.set("fillRatio", b.ratio); store.set("fillAsk", b.ask); store.set("pairing", b.pairing); store.set("useAtt", b.useAtt); store.set("lateMode", b.lateMode);
       ui.A = { ...fillNow(), plays: b.plays };
-      toast(`Fill lines on this phone now uses B's settings. Pick "Each plays ${b.plays}" when you fill. Who's going didn't change.`, 5000);
+      toast(`Fill lines on this phone now uses B. Pick "Each plays ${b.plays}" when you fill.`, 4500);
     }
     else return;
     render();

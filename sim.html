@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f1f7f8">
+<meta name="robots" content="noindex">
+<title>Playing time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css?v=2026.10.31.1">
+<style>
+/* Playing-time simulator only. Everything else comes from the board's styles.css. */
+a.brand,a.back-link,.gate-card a.btn{text-decoration:none}
+a.back-link{display:flex;align-items:center}
+.deep{padding-bottom:calc(36px + env(safe-area-inset-bottom,0px))}
+.toast{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+.sim-day .pick{display:flex;flex-direction:column;gap:6px;font-size:15px;font-weight:700;color:var(--muted)}
+.sim-day .pick .line-in{font-weight:600;color:var(--ink)}
+.sim-day .note,.setup .note{margin:0;font-size:15px;color:var(--muted)}
+.steps{display:grid;gap:8px}
+.plays-row > span.grow{font-weight:700}
+.step{display:inline-flex;align-items:center;gap:6px}
+.step button{width:44px;height:44px;border:2px solid var(--line);border-radius:50%;background:var(--card);font-weight:800;font-size:22px;line-height:1}
+.step button:disabled{opacity:.35;cursor:default}
+.step b{min-width:2.2ch;text-align:center;font-family:var(--display);font-weight:800;font-size:22px;font-variant-numeric:tabular-nums}
+.setup-wrap{display:flex;flex-direction:column;gap:14px}
+.setups{display:grid;gap:14px;align-items:start}
+.setup{gap:14px}
+.setup-h{display:flex;align-items:center;gap:10px}
+.setup-h .t{display:flex;flex-direction:column}
+.setup-h .t b{font-family:var(--display);font-weight:800;font-size:21px;line-height:1.1}
+.setup-h .t small{font-size:14px;color:var(--muted)}
+.ab{flex:none;width:36px;height:36px;border-radius:50%;display:inline-grid;place-items:center;font-family:var(--display);font-weight:800;font-size:19px;color:#fff;background:var(--ink)}
+.ab-B{background:var(--teal)}
+.setup .seg.wide{flex-wrap:wrap;border-radius:18px}
+.setup .seg.wide button{flex:1 1 auto}
+.who{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--rule);padding-top:12px}
+.who-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;border:0;background:transparent;padding:0;text-align:left;font-size:16px}
+.who-btn b:first-child{font-family:var(--display);font-weight:800;font-size:20px}
+.who-btn .chev{color:var(--teal);font-size:18px}
+.whatif{display:inline-block;background:var(--sun);color:var(--ink);font-weight:700;font-size:12px;padding:1px 7px;border-radius:999px;vertical-align:1px}
+.setup-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;border-top:1px solid var(--rule);padding-top:12px}
+.setup-foot .text-link{min-height:40px}
+.ab-switch{position:sticky;top:calc(56px + env(safe-area-inset-top,0px));z-index:5}
+@media (max-width:759px){
+  .setups[data-view="A"] .setup-B,.setups[data-view="B"] .setup-A{display:none}
+}
+@media (min-width:760px){
+  .seg.ab-switch{display:none}
+  .setups{grid-template-columns:1fr 1fr}
+  .sim-day{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}
+  .sim-day .note{grid-column:1 / -1}
+  .sim-day .steps{grid-column:1 / -1;grid-template-columns:1fr 1fr;column-gap:20px}
+}
+h2.sim-h{margin:0;font-family:var(--display);font-weight:800;font-size:22px}
+.card .warn{margin:0;background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 12px;font-weight:700;font-size:15px}
+.card .note{margin:0;font-size:15px;color:var(--muted)}
+table.sim{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.sim th,table.sim td{padding:8px 4px;text-align:right;border-top:1px solid var(--played);font-size:16px;vertical-align:top}
+table.sim thead th{border-top:0;font-size:14px;font-weight:700;color:var(--muted);padding-top:2px}
+table.sim th:first-child{text-align:left;font-weight:600;width:100%}
+table.sim thead th:first-child{font-weight:700}
+table.sim td{font-weight:700;white-space:nowrap;min-width:3.2em}
+table.sim th small{display:block;font-weight:500;font-size:13px;color:var(--muted);margin-top:2px}
+table.sim .z{color:var(--faint);font-weight:500}
+table.sim .up{color:var(--teal)} table.sim .down{color:var(--w)}
+table.sim .pl{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}
+table.sim .late{font-size:12px;font-weight:700;background:var(--sun);color:var(--ink);padding:1px 6px;border-radius:999px}
+table.sim tr.sim-grp th{padding-top:16px;font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-top:0}
+.deep table.sim th,.deep table.sim td{border-top-color:rgba(169,196,217,.22);color:#fff}
+.deep table.sim thead th,.deep table.sim th small,.deep table.sim tr.sim-grp th{color:var(--foam2)}
+.deep table.sim .z{color:var(--foam)}
+.deep table.sim .up{color:var(--cyan)} .deep table.sim .down{color:#ffb4a6}
+.deep table.sim .badge{color:var(--foam2)}
+.deep .legend-note{color:var(--foam2)}
+.deep > .deep-in > .eyebrow{margin-top:10px}
+</style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231d4db0'/%3E%3Cellipse cx='16' cy='16' rx='9' ry='3' fill='none' stroke='white' stroke-width='2.4'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" hidden></div>
+<script src="supabase.js"></script>
+<script src="lines.js?v=2026.10.31.1"></script>
+<script src="sim.js?v=2026.10.31.1"></script>
+</body>
+</html>

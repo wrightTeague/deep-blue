@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.10.29.3"; // keep in sync with version.json and the ?v= in index.html
+  const APP_VERSION = "2026.10.31.1"; // keep in sync with version.json and the ?v= in index.html and sim.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -56,6 +56,9 @@
   ui.pairing = store.get("pairing", "rotate");   // Fill lines captain pairs: "rotate", "usual" or "rest"
   ui.useAtt = store.get("useAtt", true);           // Fill lines: practice attendance nudges who goes out first
   ui.lateMode = store.get("lateMode", "start");    // Fill lines, late sign-ups: "start" (start later) or "less" (start later, play a bit less)
+  ui.fillCaps = store.get("fillCaps", 2);         // Fill lines: captains / president per line (0 = no special treatment)
+  ui.fillRatio = store.get("fillRatio", "34");    // Fill lines: "34" (3 W / 4 M), "25" (2 W / 5 M) or "43" (4 W / 3 M)
+  ui.fillAsk = store.get("fillAsk", true);        // with 3 W / 4 M: offer a 2 W / 5 M line when the men fall behind
   ui.practiceId = null;                            // practice open for check-in
   ui.scrim = null;                                 // { pid, A: [ids], B: [ids] } scrim teams for that practice (this phone only)
   ui.pickSort = store.get("pickSort", "sat"); // player picker order for lines: "sat" (most lines sat first), "played" (fewest lines first) or "az"
@@ -980,7 +983,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves and goal animations" : "Turn on ASCII waves and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves, tentacle and goal animations" : "Turn on ASCII waves, tentacle and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button><a class="text-link on-deep" href="sim.html${esc(location.search)}">Playing-time simulator</a>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
@@ -1101,22 +1104,25 @@
         <div class="fill-pair"><span>Add new lines <span class="muted" style="font-weight:400">· ${mk}</span></span>
           <div class="circles" role="group" aria-label="New lines">${[0, 1, 2, 3, 4, 6].map(v => `<button data-act="fill-n" data-v="${v}" aria-pressed="${s.n === v}">${v}</button>`).join("")}</div></div>
         <div class="plays-row"><span class="grow">Each plays</span><div class="seg inset disp" role="group" aria-label="Points per new line">${[1, 2, 3].map(v => `<button data-act="fill-plays" data-v="${v}" aria-pressed="${s.plays === v}">${v}</button>`).join("")}</div><span class="muted">point${s.plays === 1 ? "" : "s"}</span></div>
-        <div class="fill-pair"><span>Captain pairs</span>
+        <div class="plays-row"><span class="grow">Captains per line</span><div class="seg inset disp" role="group" aria-label="Captains or president per line">${[0, 1, 2, 3].map(v => `<button data-act="fill-caps" data-v="${v}" aria-pressed="${ui.fillCaps === v}">${v}</button>`).join("")}</div></div>
+        <div class="fill-pair"><span>Ratio</span>
+          <div class="seg inset wide" role="group" aria-label="Women and men per line">${[["34", "3 W · 4 M"], ["25", "2 W · 5 M"], ["43", "4 W · 3 M"]].map(([v, t]) => `<button data-act="fill-ratio" data-v="${v}" aria-pressed="${ui.fillRatio === v}">${t}</button>`).join("")}</div>
+          ${ui.fillRatio === "34" ? `<label class="fill-check" style="margin-top:6px"><input type="checkbox" id="fillAsk" ${ui.fillAsk ? "checked" : ""}><span>Offer a 2 W · 5 M line when the men fall a point behind over the day</span></label>` : ""}</div>
+        ${ui.fillCaps >= 2 ? `<div class="fill-pair"><span>Captain pairs</span>
           <div class="seg inset wide" role="group" aria-label="Captain pairs">${[["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]].map(([v, t]) => `<button data-act="fill-pairing" data-v="${v}" aria-pressed="${ui.pairing === v}">${t}</button>`).join("")}</div>
           <p class="fill-pair-note">${ui.pairing === "rotate" ? "Each captain goes out with whoever they've played with least today, so everyone plays with everyone."
             : ui.pairing === "usual" ? (() => { const up = DBLines.usualPairs(S.players, S.points); return up.length ? `Usual pairs two rounds out of three, then a mixed round: ${up.map(([a, b]) => esc(label(P(a))) + " + " + esc(label(P(b)))).join(" · ")}.` : "No usual pairs yet. Once captains have played together a few times, they'll show here."; })()
-            : "Whoever has rested longest goes out together, so the same pairs tend to come back every few lines."}</p></div>
+            : "Whoever has rested longest goes out together, so the same pairs tend to come back every few lines."}</p></div>` : ""}
         <label class="fill-check"><input type="checkbox" id="fillAtt" ${ui.useAtt ? "checked" : ""}><span>Practice attendance counts<small>${att.n ? `Best attendance starts and gets a little more time. ${plural(att.n, "practice")} ${sinceText(att)}: someone at every practice gets about 1–2 more points a day than average.` : `No practices checked in ${sinceText(att)}, so this does nothing yet.`}</small></span></label>
         ${late.size ? `<div class="fill-pair"><span>Late sign-ups (${late.size})</span>
           <div class="seg inset wide" role="group" aria-label="Late sign-ups">${[["start", "Start later"], ["less", "Start later + less time"]].map(([v, t]) => `<button data-act="fill-late" data-v="${v}" aria-pressed="${ui.lateMode === v}">${t}</button>`).join("")}</div>
           <p class="fill-pair-note">${ui.lateMode === "less" ? "They go out after everyone's first shift and play a couple fewer points over the day." : "They go out after everyone's first shift, then rotate like everyone else."} ${[...late].map(id => esc(label(P(id)))).join(", ")}.</p></div>` : ""}
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules"><li class="eyebrow" style="display:block">Every line gets</li>
-          <li>2 captains or president, whoever has rested longest goes first</li>
-          <li>3 women and 4 men (asks first if the men fall a point behind over the day)</li>
+          <li>${ui.fillCaps ? `${ui.fillCaps === 1 ? "1 captain" : ui.fillCaps + " captains"} or president, whoever has rested longest goes first` : "Captains and president rotate like everyone else"}</li>
+          <li>${ui.fillRatio === "25" ? "2 women and 5 men" : ui.fillRatio === "43" ? "4 women and 3 men" : `3 women and 4 men${ui.fillAsk ? " (asks first if the men fall a point behind over the day)" : ""}`}</li>
           <li>${zoneSet ? "2 handlers, a deep deep and a short deep, from Zone spots" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back; people who are out are skipped</li>
-          ${ui.owner ? "<li>Your private settings</li>" : ""}
           <li>Players you've placed stay put. Lines with results aren't touched.</li>
         </ul>
         <div class="pin">${btns(s.n ? (s.n === 1 ? `Fill Line ${nLines + 1}` : `Fill Lines ${nLines + 1}–${nLines + s.n}`) : "Fill empty spots", 'data-act="fill-go"')}</div>
@@ -1272,11 +1278,12 @@
     const priority = ui.useAtt ? attendancePriority(attendanceForGame(g)) : {}, late = lateOf(g);
     const going = S.players.filter(p => !away.has(p.id));
     for (const i of targets) {
-      const mb = DBLines.menBehind({ players: going, lines, idx: i, dayLines });
-      const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : { W: 3, M: 4 };
+      const base = ui.fillRatio === "25" ? { W: 2, M: 5 } : ui.fillRatio === "43" ? { W: 4, M: 3 } : { W: 3, M: 4 };
+      const mb = ui.fillRatio === "34" && ui.fillAsk ? DBLines.menBehind({ players: going, lines, idx: i, dayLines }) : { behind: false };
+      const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : base;
       const keep = (lines[i].lineup || []).map(s => s.p).filter(here), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
-        players: going, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, pairing: ui.pairing, usualPairs,
+        players: going, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, leaders: ui.fillCaps, pairing: ui.pairing, usualPairs,
         positions: zoneSets(), rookies: new Set(o.rookies), apart: o.apart, together: o.together, seed: g.id + ":" + i,
         priority, late, lateLess: ui.lateMode === "less" ? 0.5 : 0,
       });
@@ -1768,6 +1775,8 @@
       });
       toast(chosen.map(x => x.name).join(" + ") + " on the line"); return;
     }
+    if (a === "fill-caps") { ui.fillCaps = +el.dataset.v; store.set("fillCaps", ui.fillCaps); renderSheet(); return; }
+    if (a === "fill-ratio") { ui.fillRatio = el.dataset.v; store.set("fillRatio", ui.fillRatio); renderSheet(); return; }
     if (a === "fill-late") { ui.lateMode = el.dataset.v; store.set("lateMode", ui.lateMode); renderSheet(); return; }
     if (a === "tour-del") {
       if (!el.dataset.v) { ui.sheet.confirm = true; renderSheet(); return; }
@@ -1905,6 +1914,7 @@
     const a = el.dataset.act, id = el.dataset.id;
     if (a === "pod-name") { const v = el.value.trim().slice(0, 30); const x = podsOf().find(y => y.id === id); if (!x || !v || v === x.name) { if (x) el.value = x.name; return; } savePods(n => { const y = n.find(z => z.id === id); if (y) y.name = v; }); return; }
     if (el.id === "podKeep") { ui.sheet.keep = el.checked; renderSheet(); return; }
+    if (el.id === "fillAsk") { ui.fillAsk = el.checked; store.set("fillAsk", ui.fillAsk); return; }
     if (el.id === "fillAtt") { ui.useAtt = el.checked; store.set("useAtt", ui.useAtt); return; }
     if (el.id === "prDate") {
       const pr = (S.practices || []).find(x => x.id === ui.practiceId), v = el.value;

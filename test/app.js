@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.47"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.48"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -56,10 +56,10 @@
   ui.auto = null;                      // last auto-fill, for Undo: { changed:[{id,lineup}], created:[id], text }
   ui.pairing = store.get("pairing", "rotate");   // Fill lines captain pairs: "rotate", "usual" or "rest"
   ui.useAtt = store.get("useAtt", true);           // Fill lines: practice attendance nudges who goes out first
-  ui.lateMode = store.get("lateMode", "start");
+  ui.lateMode = store.get("lateMode", "start");    // Fill lines, late sign-ups: "start" (start later) or "less" (start later, play a bit less)
   ui.fillCaps = store.get("fillCaps", 2);         // Fill lines: captains / president per line (0 = no special treatment)
   ui.fillRatio = store.get("fillRatio", "34");    // Fill lines: "34" (3 W / 4 M), "25" (2 W / 5 M) or "43" (4 W / 3 M)
-  ui.fillAsk = store.get("fillAsk", true);        // with 3 W / 4 M: offer a 2 W / 5 M line when the men fall behind    // Fill lines, late sign-ups: "start" (start later) or "less" (start later, play a bit less)
+  ui.fillAsk = store.get("fillAsk", true);        // with 3 W / 4 M: offer a 2 W / 5 M line when the men fall behind
   ui.practiceId = null;                            // practice open for check-in
   ui.scrim = null;                                 // { pid, A: [ids], B: [ids] } scrim teams for that practice (this phone only)
   ui.pickSort = store.get("pickSort", "sat"); // player picker order for lines: "sat" (most lines sat first), "played" (fewest lines first) or "az"

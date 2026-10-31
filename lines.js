@@ -205,7 +205,7 @@
       const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
       // Main list rested, then backups rested; a third captain only if no one else rested
       // fits; then the same again allowing back to back.
-      const spare = p => !isLeader(p) || count(isLeader) < wantLeaders;
+      const spare = p => !wantLeaders || !isLeader(p) || count(isLeader) < wantLeaders;   // 0 captains per line: they're like anyone else
       for (const strict of [true, false]) {
         for (const pool of [main, ok]) if (missing() > 0) fill(pool.filter(spare), missing, "", [strict]);
         for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
@@ -218,8 +218,9 @@
       if (!count(p => deep.has(p.id))) notes.push("No deep deep fits.");
     }
     // 3. Everyone else by rest. Leaders only if nobody else fits, so they stay near 1 line in 3.
-    fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, "");
-    fill(leaderPool, () => SLOTS - line.length, "H");
+    // With 0 captains per line set aside, captains are just players.
+    if (!wantLeaders) fill(active, () => SLOTS - line.length, "");
+    else { fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, ""); fill(leaderPool, () => SLOTS - line.length, "H"); }
 
     // Roles: when there's a Handlers list, its picks get H (up to 3) and everyone else C.
     // Players you placed keep the role you gave them.
@@ -282,7 +283,64 @@
     return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
-  const api = { restBefore, planLine, menBehind, assignSpots, usualPairs, playsOf, toPairs, SLOTS };
+  /* Playing-time simulator: run the line maker over one whole tournament day. Nothing is saved.
+     o: what planLine takes (players = who's going, ratio, leaders, pairing, usualPairs,
+     positions, rookies, apart, together, priority, priorityMode, late, lateLess), plus
+       games: [{ id, lines }] the day's games in play order, each with its lines from the board
+              (id null for a made-up game),
+       ppg:   points per game, plays: points per new line,
+       five:  say yes whenever menBehind offers a 2 W / 5 M line (pass it only with 3 W / 4 M).
+     Points with a result count as played. Games before the last one with a result are over at
+     the points they played; the rest run to ppg points. In a game, a line with no result that
+     comes before one with a result was skipped. Lines already planned keep the players on them
+     who are going and get their empty spots filled; new lines make up the rest of each game.
+     → { games: [{ id, lines: [{ lineup, plays, fixed, five }] }], points: [{ g, ids, five, played }],
+         fives: lines made 2 W / 5 M, short: lines with fewer than 7 } */
+  function simDay(o) {
+    const byId = new Map(o.players.map(p => [p.id, p]));
+    const here = id => { const p = byId.get(id); return !!p && p.active !== false; };
+    const ppg = Math.max(1, Math.round(+o.ppg) || 11), plays = Math.max(1, Math.min(4, Math.round(+o.plays) || 1));
+    const games = o.games || [];
+    const lastPlayed = games.reduce((k, g, i) => ((g.lines || []).some(resultsOf) ? i : k), -1);
+    const done = [], points = [];
+    let fives = 0, short = 0;
+    const copy = l => (l.lineup || []).map(s => ({ p: s.p, r: s.r || "" }));
+    games.forEach((g, gi) => {
+      const src = g.lines || [];
+      const lastLine = src.reduce((k, l, i) => (resultsOf(l) ? i : k), -1);
+      const playedPts = src.reduce((n, l) => n + resultsOf(l), 0);
+      let left = (gi < lastPlayed ? playedPts : Math.max(playedPts, ppg)) - playedPts;
+      const lines = [];
+      src.forEach((l, i) => {
+        const r = resultsOf(l);
+        if (i < lastLine) { if (r) lines.push({ lineup: copy(l), plays: r, fixed: r }); return; }
+        if (i === lastLine) { const more = Math.max(0, Math.min(playsOf(l) - r, left)); left -= more; lines.push({ lineup: copy(l), plays: r + more, fixed: r }); return; }
+        if (left <= 0) return;
+        const n = Math.min(playsOf(l), left); left -= n;
+        lines.push({ lineup: copy(l), plays: n, fixed: 0 });
+      });
+      while (left > 0) { const n = Math.min(plays, left); left -= n; lines.push({ lineup: [], plays: n, fixed: 0 }); }
+      const dayLines = done.map(d => d.lines), prevLines = gi > 0 ? done[gi - 1].lines : null;
+      lines.forEach((l, i) => {
+        if (l.fixed) return;
+        const keep = l.lineup.map(s => s.p).filter(here);
+        if (keep.length >= SLOTS) return;   // a full planned line: Fill lines leaves it alone
+        let ratio = o.ratio || { W: 3, M: 4 };
+        if (o.five && menBehind({ players: o.players, lines, idx: i, dayLines }).behind) { ratio = { W: 2, M: 5 }; l.five = true; fives++; }
+        const r = planLine({ ...o, ratio, lines, idx: i, prevLines, dayLines, keep, keepRoles: Object.fromEntries(l.lineup.map(s => [s.p, s.r || ""])),
+          seed: (g.id || "sim:" + gi) + ":" + i });
+        l.lineup = r.lineup;
+        if (r.lineup.length < SLOTS) short++;
+      });
+      // Every point of the finished day counts as played, for the games after it.
+      lines.forEach(l => { l.outcomes = Array.from({ length: l.plays }, () => ({ result: "sim" })); });
+      lines.forEach(l => { for (let k = 0; k < l.plays; k++) points.push({ g: gi, ids: l.lineup.map(s => s.p), five: !!l.five, played: k < l.fixed }); });
+      done.push({ id: g.id || null, lines });
+    });
+    return { games: done, points, fives, short };
+  }
+
+  const api = { restBefore, planLine, menBehind, assignSpots, usualPairs, simDay, playsOf, toPairs, SLOTS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.DBLines = api;
 })(typeof window !== "undefined" ? window : this);
