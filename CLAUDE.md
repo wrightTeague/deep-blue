@@ -16,6 +16,7 @@ Notes for Claude sessions working in this repo. README.md says what the app does
 
 - Repo root = **real board** (the one the team uses): `index.html`, `app.js`, `lines.js`, `styles.css`, `ocean.js`, `ascii.js`, `version.json`.
 - `test/` = **test board**: the same files for a separate test team in the same database. `test/index.html` loads `../supabase.js` from the root.
+- `test/sim.html` + `test/sim.js` = the **playing-time simulator** (test board only), linked quietly at the bottom of Roster. Read-only: it loads with the passcode already saved on the phone and never saves to the team. It runs `simDay` from `lines.js`, and its Fill lines inputs mirror `autoFill` in `app.js`, so change the two together.
 - `supabase.js` is the bundled supabase-js browser build. Don't edit it.
 - `lines.js` is the line maker, pure functions with no DOM. It runs in Node too (`require("./lines.js")`).
 - `sims/` has offline simulations of the line maker.
@@ -32,7 +33,7 @@ Notes for Claude sessions working in this repo. README.md says what the app does
 
 1. Bump the version everywhere for each board you touch:
    - real: `APP_VERSION` in `app.js`, `version.json`, and every `?v=` in `index.html`. Format `YYYY.MM.DD.N` (e.g. `2026.10.29.3`).
-   - test: the same three in `test/`. Format `test.N`.
+   - test: the same three in `test/`, plus the `?v=` in `test/sim.html`. Format `test.N`.
    Open boards see the new `version.json` and reload themselves.
 2. Add a plain-words entry to `CHANGELOG.md`, newest first, under **Real board**, **Test board**, or **Real board and test board**. Write it for teammates, not developers.
 3. Commit, push, check the deploy.
@@ -44,7 +45,7 @@ The real board is the test board with these differences. Copy the test files ove
 - `lines.js`: header comment without "(test board only)".
 - `ascii.js`: header says `Deep Blue ASCII touches:`.
 - `index.html`: `theme-color` `#f1f7f8` (test uses `#ffe14d`), real version in every `?v=`.
-- Test-only for now: the grabbing tentacle on Roster (`placeTentacle` in `app.js`, `tentacle` in `ascii.js`, the `.ascii-tent` / `.tgrab` CSS) and pods. Leave them out of the real board unless asked.
+- Test-only for now: the grabbing tentacle on Roster (`placeTentacle` in `app.js`, `tentacle` in `ascii.js`, the `.ascii-tent` / `.tgrab` CSS), pods, and the playing-time simulator (`sim.html`, `sim.js` and the Roster link to it). Leave them out of the real board unless asked. `simDay` in `lines.js` can go over with the rest of the file; nothing on the real board calls it.
 
 Diff the two boards afterwards. Only the items above should differ.
 

@@ -671,6 +671,7 @@ table.stats td.z{color:var(--faint)}
 .text-link.on-deep{color:var(--foam2);margin-top:18px;font-weight:600}
 .text-link.on-deep + .text-link.on-deep{margin-top:0}
 .text-link.armed{color:#ffb4a6;font-weight:800}
+a.text-link{display:flex;align-items:center;text-decoration:none}
 .date-row{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:var(--muted)}
 .date-row .date-pill{max-width:none}
 .role-chip{position:relative}

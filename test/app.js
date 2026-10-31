@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.46"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.47"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -996,7 +996,7 @@
         ${grp("W", "Women-matching")}${grp("M", "Men-matching")}${grp("", "Matchup not set")}
         <p class="legend-note">Tap a player to change their name, W/M, badge or zone spots, mark them out, or remove them.</p>
       </div>
-      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves, tentacle and goal animations" : "Turn on ASCII waves, tentacle and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button>`)}`;
+      ${deep(renderZone() + renderPods() + privateCard() + `<button class="text-link on-deep" data-act="sharks">${sharksOn() ? "Turn off sharks" : "Turn on sharks"}</button><button class="text-link on-deep" data-act="ascii">${asciiOn() || !window.DBAscii ? "Turn off ASCII waves, tentacle and goal animations" : "Turn on ASCII waves, tentacle and goal animations"}</button><button class="text-link on-deep" data-act="logout">Forget passcode on this device</button><a class="text-link on-deep" href="sim.html${esc(location.search)}">Playing-time simulator</a>`)}`;
   }
 
   // ---------- sheets (picker, menus, forms) ----------
