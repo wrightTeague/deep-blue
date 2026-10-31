@@ -16,7 +16,7 @@ Notes for Claude sessions working in this repo. README.md says what the app does
 
 - Repo root = **real board** (the one the team uses): `index.html`, `app.js`, `lines.js`, `styles.css`, `ocean.js`, `ascii.js`, `sim.html`, `sim.js`, `version.json`.
 - `test/` = **test board**: the same files for a separate test team in the same database. `test/index.html` loads `../supabase.js` from the root.
-- `sim.html` + `sim.js` (and the same in `test/`) = the **playing-time simulator**, linked quietly at the bottom of Roster. Read-only: it loads with the passcode already saved on the phone and never saves to the team. It runs `simDay` from `lines.js`, and its Fill lines inputs mirror `autoFill` in `app.js`, so change the two together. `sim.js` is the same file on both boards; `test/sim.html` marks itself `data-board="test"`.
+- `sim.html` + `sim.js` (and the same in `test/`) = the **playing-time simulator**, linked quietly at the bottom of Roster. Read-only: it loads with the passcode already saved on the phone and never saves to the team. It runs `simDay` from `lines.js`, and its Fill lines inputs mirror `autoFill` in `app.js`, so change the two together. `sim.js` needs no changes between boards (`test/sim.html` marks itself `data-board="test"`), so it goes over as is.
 - `supabase.js` is the bundled supabase-js browser build. Don't edit it.
 - `lines.js` is the line maker, pure functions with no DOM. It runs in Node too (`require("./lines.js")`).
 - `sims/` has offline simulations of the line maker.

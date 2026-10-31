@@ -108,7 +108,7 @@
 
   const ui = {
     tid: store.get("sim:tour", null), day: store.get("sim:day", null), ppg: store.get("sim:ppg", 11),
-    view: store.get("sim:view", "B") === "A" ? "A" : "B", whoOpen: null,
+    view: store.get("sim:view", "B") === "A" ? "A" : "B", whoOpen: null, gridOpen: store.get("sim:grid", false) === true,
     A: fillNow(), B: store.has("sim:B") ? fixSetup(store.get("sim:B")) : fillNow(),
     who: { A: {}, B: {} },   // what-if Who's going for each setup: player id → "go" | "late" | "away"
   };
@@ -308,6 +308,43 @@
       <p class="legend-note">– means not going in that setup. Points already played count as they happened.</p></div>`;
   }
 
+  // Every point of the day for one setup (the one picked with A / B): a row per person, a column
+  // per point. A shift is one bar across the points its line plays. Folded away until opened.
+  function gridCard(A, B, games) {
+    if (!ui.gridOpen) return `<button class="add-dashed" data-act="grid-open" aria-expanded="false">Show who plays every point</button>`;
+    const side = ui.view, run = side === "A" ? A : B, cols = [], gameCols = [];
+    run.res.games.forEach((g, gi) => {
+      let n = 0;
+      g.lines.forEach((l, li) => {
+        const on = new Set(l.lineup.map(s => s.p)), prev = new Set(li ? g.lines[li - 1].lineup.map(s => s.p) : []);
+        for (let k = 0; k < l.plays; k++) cols.push({ gi, k, n: ++n, last: k === l.plays - 1, played: k < l.fixed, five: !!l.five, on, prev });
+      });
+      gameCols.push(n);
+    });
+    const gName = gi => (games.list[gi] && games.list[gi].id ? games.list[gi].name : "Game " + (gi + 1));
+    const goingIn = p => p.active && run.who.state(p.id) !== "away", pts = run.stats.pts;
+    const ps = [...new Set([...activePlayers().filter(goingIn).map(p => p.id), ...[...pts.keys()].filter(P)])].map(P).sort((p, q) => label(p).localeCompare(label(q)));
+    const colCls = c => [c.k === 0 && c.n === 1 ? "gs" : "", c.played ? "pd" : ""].filter(Boolean).join(" ");
+    const cell = (p, c) => {
+      if (!c.on.has(p.id)) return `<td class="${colCls(c)}"></td>`;
+      const cls = [isLead(p) ? "L" : p.gender || "U", c.k > 0 ? "jl" : "", c.last ? "" : "jr", c.k === 0 && c.prev.has(p.id) ? "b2b" : ""].filter(Boolean).join(" ");
+      return `<td class="${colCls(c)}"><i class="${cls}" title="${esc(label(p))} · ${esc(gName(c.gi))}, point ${c.n}${c.played ? " (played)" : ""}"></i></td>`;
+    };
+    const row = p => `<tr><th class="nm" scope="row"><span>${esc(label(p))}</span></th>${cols.map(c => cell(p, c)).join("")}<td class="tot">${pts.get(p.id) || 0}</td></tr>`;
+    const grp = (name, list) => (list.length ? `<tr class="gg"><th colspan="${cols.length + 2}"><span>${name}</span></th></tr>${list.map(row).join("")}` : "");
+    const anyPlayed = cols.some(c => c.played), anyFive = cols.some(c => c.five), anyB2b = run.stats.b2b > 0;
+    return `<div class="grid-h"><span class="eyebrow">Every point</span>
+        <div class="seg grid-ab" role="group" aria-label="Which setup to show"><button data-act="view" data-v="A" aria-pressed="${side === "A"}">A</button><button data-act="view" data-v="B" aria-pressed="${side === "B"}">B</button></div>
+        <button class="text-link on-deep grid-hide" data-act="grid-open" aria-expanded="true">Hide</button></div>
+      <div class="deep-card grid-card"><div class="grid-scroll"><table class="pgrid" aria-label="Who plays each point, setup ${side}">
+        <thead><tr class="gh"><th class="nm"></th>${gameCols.map((n, gi) => `<th colspan="${n}" class="gs"><span style="width:calc(var(--cw) * ${n})">${esc(gName(gi))}</span></th>`).join("")}<th></th></tr>
+          <tr class="ph"><th class="nm"></th>${cols.map(c => `<th class="${[colCls(c), c.five ? "five" : ""].filter(Boolean).join(" ")}"${c.five ? ' title="2 W · 5 M"' : ""}>${c.n}</th>`).join("")}<th class="tot">Pts</th></tr></thead>
+        <tbody>${grp("Captains &amp; president", ps.filter(isLead))}${grp("Women-matching", ps.filter(p => !isLead(p) && p.gender === "W"))}${grp("Men-matching", ps.filter(p => !isLead(p) && p.gender === "M"))}${grp("Matchup not set", ps.filter(p => !isLead(p) && !p.gender))}</tbody>
+      </table></div>
+      <div class="grid-key"><span><i class="k W"></i>Woman</span><span><i class="k M"></i>Man</span><span><i class="k L"></i>Captain / president</span>${anyB2b ? '<span><i class="k M b2b"></i>Back to back</span>' : ""}${anyFive ? '<span><b class="k five">5</b>2 W · 5 M point</span>' : ""}${anyPlayed ? '<span><i class="k pd"></i>Already played</span>' : ""}</div>
+      <p class="legend-note">Setup ${side}. A bar is one shift: the points its line plays in a row.${run.who.changed ? ` Uses ${side}'s what-if Who's going.` : ""}</p></div>`;
+  }
+
   function gate(msg, btn) {
     $("#app").innerHTML = `<div class="gate"><div class="gate-card"><span class="gate-logo">${LOGO}</span><h1>Playing time${TAG}</h1><p>${msg}</p>${btn || ""}</div><div class="gate-sea"><div class="wave"></div><div class="gate-foot">Deep Blue Ultimate · Franklin &amp; Marshall</div></div></div>`;
   }
@@ -348,7 +385,7 @@
         <div class="setups" data-view="${ui.view}">${setupCard(t, "A", A, att)}${setupCard(t, "B", B, att)}</div></div>
         ${summaryCard(A, B)}
       </div>
-      <div class="wave" aria-hidden="true"></div><section class="deep"><div class="deep-in">${attendanceCard(att, A, B)}${peopleCard(A, B)}</div></section>`;
+      <div class="wave" aria-hidden="true"></div><section class="deep"><div class="deep-in">${attendanceCard(att, A, B)}${peopleCard(A, B)}${gridCard(A, B, games)}</div></section>`;
     }
     $("#app").innerHTML = head + `<main id="main">${body}</main>`;
     if (sig) { const el = [...document.querySelectorAll("[data-act]")].find(x => ["act", "side", "k", "v", "id"].map(k => x.dataset[k] || "").join("|") === sig); if (el) el.focus({ preventScroll: true }); }
@@ -366,6 +403,7 @@
     else if (a === "set") { const k = el.dataset.k; ui[side][k] = k === "plays" || k === "caps" ? +v : v; if (side === "B") saveB(); }
     else if (a === "games") { const d = currentDay(t), g = dayGames(t, d); store.set("sim:games", { k: t.id + "|" + d, n: Math.max(g.minN, Math.min(MAX_GAMES, g.list.length + +v)) }); }
     else if (a === "ppg") { ui.ppg = Math.max(PPG_MIN, Math.min(PPG_MAX, ui.ppg + +v)); store.set("sim:ppg", ui.ppg); }
+    else if (a === "grid-open") { ui.gridOpen = !ui.gridOpen; store.set("sim:grid", ui.gridOpen); }
     else if (a === "who-open") ui.whoOpen = ui.whoOpen === side ? null : side;
     else if (a === "who") { const s = whoOf(t, side).state(el.dataset.id); ui.who[side] = { ...ui.who[side], [el.dataset.id]: s === "go" ? "late" : s === "late" ? "away" : "go" }; saveWho(); }
     else if (a === "who-reset") { ui.who[side] = {}; saveWho(); }

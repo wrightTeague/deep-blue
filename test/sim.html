@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="styles.css?v=test.48">
+<link rel="stylesheet" href="styles.css?v=test.49">
 <style>
 /* Playing-time simulator only. Everything else comes from the board's styles.css. */
 a.brand,a.back-link,.gate-card a.btn{text-decoration:none}
@@ -77,6 +77,44 @@ table.sim tr.sim-grp th{padding-top:16px;font-family:var(--display);font-weight:
 .deep table.sim .badge{color:var(--foam2)}
 .deep .legend-note{color:var(--foam2)}
 .deep > .deep-in > .eyebrow{margin-top:10px}
+/* Every point: who plays which point, one setup at a time. Scrolls sideways inside its own box. */
+.deep > .deep-in > .add-dashed[data-act="grid-open"]{margin-top:14px}
+.grid-h{display:flex;align-items:center;gap:12px;margin-top:14px}
+.grid-h .eyebrow{flex:1 1 auto}
+.grid-ab button{min-height:40px;min-width:48px;font-family:var(--display);font-weight:800}
+.grid-hide.text-link.on-deep{margin-top:0}
+.deep .deep-card.grid-card{background:var(--sea2);padding:10px 0 12px;overflow:hidden}
+.grid-card .grid-key,.grid-card .legend-note{padding:0 14px}
+.grid-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+table.pgrid{--cw:14px;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums;color:#fff}
+table.pgrid th,table.pgrid td{padding:0;width:var(--cw);min-width:var(--cw);max-width:var(--cw);height:22px}
+table.pgrid .nm{position:sticky;left:0;z-index:2;background:var(--sea2);min-width:104px;max-width:104px;width:104px;padding:0 8px 0 14px;text-align:left;font-weight:600;font-size:14px}
+table.pgrid .nm span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.pgrid .gs{border-left:2px solid rgba(169,196,217,.35)}
+table.pgrid tr.gh th{height:20px;text-align:left;font-size:12px;font-weight:700;color:var(--foam2)}
+table.pgrid tr.gh th span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:4px;box-sizing:border-box}
+table.pgrid tr.ph th{height:20px;font-size:9px;font-weight:700;color:var(--foam);text-align:center}
+table.pgrid tr.ph th.five{background:var(--sun);color:var(--ink);border-radius:4px}
+table.pgrid tr.ph th.pd{color:var(--cyan)}
+table.pgrid td.pd{background:rgba(255,255,255,.07)}
+table.pgrid .tot{min-width:40px;max-width:none;width:40px;padding:0 14px 0 8px;text-align:right;font-weight:800;font-size:14px}
+table.pgrid tr.ph th.tot{font-size:12px;color:var(--foam2)}
+table.pgrid tr.gg th{height:30px;vertical-align:bottom;text-align:left;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--foam2)}
+table.pgrid tr.gg th span{position:sticky;left:14px;padding-left:14px}
+table.pgrid tbody tr:not(.gg):hover th,table.pgrid tbody tr:not(.gg):hover td{background-color:rgba(95,211,224,.10)}
+table.pgrid td i{display:block;height:14px;margin:4px 1px;border-radius:4px}
+table.pgrid td i.jl{margin-left:0;border-top-left-radius:0;border-bottom-left-radius:0}
+table.pgrid td i.jr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.pgrid i.W,.grid-key .k.W{background:var(--w)} .pgrid i.M,.grid-key .k.M{background:var(--m)}
+.pgrid i.L,.grid-key .k.L{background:var(--foam2)} .pgrid i.U{background:var(--faint)}
+.pgrid i.b2b,.grid-key .k.b2b{box-shadow:inset 3px 0 0 var(--sun)}
+.grid-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:13px;color:var(--foam2)}
+.grid-key span{display:inline-flex;align-items:center;gap:6px}
+.grid-key .k{display:inline-block;width:18px;height:12px;border-radius:3px}
+.grid-key .k.pd{background:rgba(255,255,255,.18)}
+.grid-key b.k.five{display:inline-grid;place-items:center;width:16px;height:16px;font-size:10px;background:var(--sun);color:var(--ink)}
+.grid-card .legend-note{margin-top:8px}
+@media (min-width:760px){ table.pgrid{--cw:18px} table.pgrid .nm{min-width:140px;max-width:140px;width:140px} table.pgrid tr.ph th{font-size:10px} }
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ffe14d'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%231d4db0'/%3E%3Cellipse cx='16' cy='16' rx='7' ry='2.4' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -85,7 +123,7 @@ table.sim tr.sim-grp th{padding-top:16px;font-family:var(--display);font-weight:
 <div id="app"></div>
 <div class="toast" id="toast" hidden></div>
 <script src="../supabase.js"></script>
-<script src="lines.js?v=test.48"></script>
-<script src="sim.js?v=test.48"></script>
+<script src="lines.js?v=test.49"></script>
+<script src="sim.js?v=test.49"></script>
 </body>
 </html>

@@ -4,6 +4,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Oct 31, 2026
 
+**Test board**
+- **Every point, in the playing-time simulator.** Under Points per person, "Show who plays every point" opens the whole simulated day for A or B: a row per person, a column per point, and a bar for each shift. Points already played, back to backs and 2 W · 5 M points are marked. On phones it scrolls sideways inside its own box.
+
 **Real board**
 - **Fill lines is more configurable** (from the test board). New "Captains per line" (0–3) and "Ratio" (3 W · 4 M, 2 W · 5 M, 4 W · 3 M) settings, remembered on each phone. They start where Fill lines already was (2 captains, 3 W · 4 M, offering a 2 W · 5 M line when the men fall behind), so nothing changes until you change them. With 3 W · 4 M you can turn that offer on or off, and with 0 captains per line, captains rotate like everyone else.
 - **Playing-time simulator** (from the test board). A quiet link at the very bottom of Roster opens a page that runs Fill lines over a whole tournament day without changing anything on the board, and compares two setups side by side: A is this phone's Fill lines settings, B is yours to change, including a what-if Who's going. It shows everyone's points for the day, women vs men, fewest and most, back to backs, and how practice attendance moves things. "Use B in Fill lines" makes B's settings this phone's Fill lines settings.
