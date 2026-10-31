@@ -205,7 +205,7 @@
       const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
       // Main list rested, then backups rested; a third captain only if no one else rested
       // fits; then the same again allowing back to back.
-      const spare = p => !isLeader(p) || count(isLeader) < wantLeaders;
+      const spare = p => !wantLeaders || !isLeader(p) || count(isLeader) < wantLeaders;   // 0 captains per line: they're like anyone else
       for (const strict of [true, false]) {
         for (const pool of [main, ok]) if (missing() > 0) fill(pool.filter(spare), missing, "", [strict]);
         for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
@@ -218,8 +218,9 @@
       if (!count(p => deep.has(p.id))) notes.push("No deep deep fits.");
     }
     // 3. Everyone else by rest. Leaders only if nobody else fits, so they stay near 1 line in 3.
-    fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, "");
-    fill(leaderPool, () => SLOTS - line.length, "H");
+    // With 0 captains per line set aside, captains are just players.
+    if (!wantLeaders) fill(active, () => SLOTS - line.length, "");
+    else { fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, ""); fill(leaderPool, () => SLOTS - line.length, "H"); }
 
     // Roles: when there's a Handlers list, its picks get H (up to 3) and everyone else C.
     // Players you placed keep the role you gave them.

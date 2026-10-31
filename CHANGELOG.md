@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Oct 31, 2026
+
+**Test board**
+- **Fill lines is more configurable.** New "Captains per line" (0–3) and "Ratio" (3 W · 4 M, 2 W · 5 M, 4 W · 3 M) settings, remembered on each phone. With 3 W · 4 M you can turn the "offer a 2 W · 5 M line when the men fall behind" check on or off. With 0 captains per line, captains rotate like everyone else. Captain pairs only shows when there are 2 or more captains per line, and the list under "Every line gets" follows the settings.
+
 ## Oct 29, 2026
 
 **Real board and test board**
