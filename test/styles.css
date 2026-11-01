@@ -357,6 +357,8 @@ table.stats thead th{border-top:0;height:44px;font-weight:700;font-size:15px;col
 table.stats th[aria-sort]{color:var(--teal)}
 table.stats th:first-child,table.stats td:first-child{text-align:left}
 table.stats td.z{color:var(--faint)}
+table.stats td.all{font-weight:800}
+table.stats td.all,table.stats th[data-k="all"]{padding-right:12px}
 .pl{display:inline-flex;align-items:center;gap:8px;font-weight:700}
 .legend-note{font-size:14px;color:var(--muted);margin:0}
 

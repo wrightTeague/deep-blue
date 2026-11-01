@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Nov 1, 2026
+
+**Test board**
+- **Stats shows planned points too.** When some lines haven't been played yet, Stats adds two columns: **Plan** (points someone is on a line for but hasn't played yet) and **All** (played plus planned), so you can see how much everyone has scheduled for a game, the tournament, or everything. Tap either one to sort by it. People who are only on planned lines show up too. Lines left over in a game that's already finished don't count, and the score, holds and breaks still only count points that were played.
+
 ## Oct 31, 2026
 
 **Test board**
