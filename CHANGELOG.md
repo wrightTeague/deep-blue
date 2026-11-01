@@ -4,6 +4,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Nov 1, 2026
 
+**Real board**
+- **Every point, in the playing-time simulator** (from the test board). Under Points per person, "Show who plays every point" opens the whole simulated day for A or B: a row per person, a column per point, and a bar for each shift. Points already played, back to backs and 2 W · 5 M points are marked. On phones it scrolls sideways inside its own box.
+
 **Test board**
 - **Stats shows planned points too.** When some lines haven't been played yet, Stats adds two columns: **Plan** (points someone is on a line for but hasn't played yet) and **All** (played plus planned), so you can see how much everyone has scheduled for a game, the tournament, or everything. Tap either one to sort by it. People who are only on planned lines show up too. Lines left over in a game that's already finished don't count, and the score, holds and breaks still only count points that were played.
 
