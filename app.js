@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.11.01.1"; // keep in sync with version.json and the ?v= in index.html and sim.html
+  const APP_VERSION = "2026.11.01.2"; // keep in sync with version.json and the ?v= in index.html and sim.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -204,6 +204,24 @@
       if (o.result === "us") { if (o.scorer) row(o.scorer).g++; if (o.assist && o.assist !== "none") row(o.assist).a++; }
     }));
     return { team, rows: [...rows.values()] };
+  }
+  // Points still to come (Stats' Plan column): points on lines that haven't got a result yet.
+  // Same rule as the playing-time simulator: a game is over once a later game has a result, and
+  // in a game the points before its last result were skipped, so neither counts.
+  // → { byId: Map id → points, n: points to come }
+  function pointsAhead(lines) {
+    const byId = new Map(), byGame = new Map(), over = new Set();
+    const withResult = new Set(S.points.filter(x => outs(x).some(o => o.result)).map(x => x.game_id));
+    for (let i = S.games.length - 1, later = false; i >= 0; i--) { if (later) over.add(S.games[i].id); if (withResult.has(S.games[i].id)) later = true; }
+    lines.forEach(pt => { if (!over.has(pt.game_id)) { if (!byGame.has(pt.game_id)) byGame.set(pt.game_id, []); byGame.get(pt.game_id).push(pt); } });
+    let n = 0;
+    byGame.forEach(list => {
+      const flat = [];
+      list.slice().sort((a, b) => a.pos - b.pos).forEach(pt => outs(pt).forEach(o => flat.push({ pt, done: !!o.result })));
+      const last = flat.map(x => x.done).lastIndexOf(true);
+      flat.slice(last + 1).forEach(x => { n++; (x.pt.lineup || []).forEach(s => byId.set(s.p, (byId.get(s.p) || 0) + 1)); });
+    });
+    return { byId, n };
   }
   // Planned points per player for a game: every line they're on counts for the points it plays.
   function plannedPoints(lines) {
@@ -912,13 +930,19 @@
     const t = (ui.stats.tourId && tours().find(x => x.id === ui.stats.tourId)) || tourOf(g), sc = scope === "tour" && !t ? "game" : scope;
     const pts = sc === "game" && g ? gamePoints(g.id) : sc === "tour" ? S.points.filter(x => { const gg = S.games.find(y => y.id === x.game_id); return gg && gg.tournament_id === t.id; }) : S.points.slice();
     const { team, rows } = computeStats(pts);
-    const keyMap = { name: r => label(P(r.id)).toLowerCase(), pts: r => r.pts, o: r => r.o, d: r => r.d, g: r => r.g, a: r => r.a };
-    const k = ui.stats.sort, f = keyMap[k] || keyMap.pts;
-    rows.sort((x, y) => k === "name" ? f(x).localeCompare(f(y)) : (f(y) - f(x)) || (y.pts - x.pts));
+    // Plan / All columns: points on lines not played yet, for people with or without played points.
+    const ahead = pointsAhead(pts), anyAhead = ahead.n > 0;
+    const table = rows.map(r => ({ ...r, plan: ahead.byId.get(r.id) || 0 }));
+    ahead.byId.forEach((n, id) => { if (!rows.some(r => r.id === id)) table.push({ id, pts: 0, o: 0, d: 0, g: 0, a: 0, plan: n }); });
+    table.forEach(r => { r.all = r.pts + r.plan; });
+    const keyMap = { name: r => label(P(r.id)).toLowerCase(), pts: r => r.pts, plan: r => r.plan, all: r => r.all, o: r => r.o, d: r => r.d, g: r => r.g, a: r => r.a };
+    const k = !anyAhead && (ui.stats.sort === "plan" || ui.stats.sort === "all") ? "pts" : ui.stats.sort, f = keyMap[k] || keyMap.pts;
+    table.sort((x, y) => k === "name" ? f(x).localeCompare(f(y)) : (f(y) - f(x)) || (y.pts - x.pts) || (y.all - x.all));
     const th = (id, txt, full) => `<th data-act="sort" data-k="${id}" ${k === id ? 'aria-sort="descending"' : ""}${full ? ` title="${full}"` : ""}>${txt}${k === id ? " ↓" : ""}</th>`;
     const z = n => n ? `<td>${n}</td>` : '<td class="z">·</td>';
-    const body = rows.map(r => { const p = P(r.id); return `<tr><td><span class="pl" title="${esc(p ? p.name : "")}"><i class="dot ${p?.gender || ""}"></i>${esc(p ? label(p) : "Removed player")}${badge(p)}</span></td><td>${r.pts}</td>${z(r.o)}${z(r.d)}${z(r.g)}${z(r.a)}</tr>`; }).join("");
-    const what = sc === "game" && g ? `${esc(g.name)} · ${plural(team.played, "point")} recorded${(() => { const now = nowPoint(pts); return now ? `, Pt ${now.n} on now` : ""; })()}` : sc === "tour" ? `${esc(t.name)} · ${plural(team.played, "point")}` : `All games · ${plural(team.played, "point")}`;
+    const body = table.map(r => { const p = P(r.id); return `<tr><td><span class="pl" title="${esc(p ? p.name : "")}"><i class="dot ${p?.gender || ""}"></i>${esc(p ? label(p) : "Removed player")}${badge(p)}</span></td>${z(r.pts)}${anyAhead ? `${z(r.plan)}<td class="all">${r.all}</td>` : ""}${z(r.o)}${z(r.d)}${z(r.g)}${z(r.a)}</tr>`; }).join("");
+    const more = anyAhead ? ` · ${ahead.n} more planned` : "";
+    const what = sc === "game" && g ? `${esc(g.name)} · ${plural(team.played, "point")} recorded${(() => { const now = nowPoint(pts); return now ? `, Pt ${now.n} on now` : ""; })()}${more}` : sc === "tour" ? `${esc(t.name)} · ${plural(team.played, "point")}${more}` : `All games · ${plural(team.played, "point")}${more}`;
     // Below the water, for one game: who hasn't been on yet.
     let below = "";
     if (sc === "game" && g) {
@@ -945,10 +969,10 @@
           <div><b>${team.breaks}/${team.dPts}</b><span>Breaks on D</span></div>
           <div><b>${team.played}</b><span>Points played</span></div>
         </div>
-        ${rows.length ? `<div class="table-card"><table class="stats">
-          <thead><tr>${th("name", "Player")}${th("pts", "Pts", "Points played")}${th("o", "O", "Started on offense")}${th("d", "D", "Started on defense")}${th("g", "G", "Goals")}${th("a", "A", "Assists")}</tr></thead>
+        ${table.length ? `<div class="table-card"><table class="stats">
+          <thead><tr>${th("name", "Player")}${th("pts", "Pts", "Points played")}${anyAhead ? th("plan", "Plan", "Points on lines not played yet") + th("all", "All", "Played and planned") : ""}${th("o", "O", "Started on offense")}${th("d", "D", "Started on defense")}${th("g", "G", "Goals")}${th("a", "A", "Assists")}</tr></thead>
           <tbody>${body}</tbody></table></div>
-          <p class="legend-note">Pts = points played · O / D = points started on offense / defense · G = goals · A = assists. Tap a column to sort.</p>` : `<p class="empty-note">Stats appear once a point has a result. Tap "We scored" or "They scored" on a point.</p>`}
+          <p class="legend-note">Pts = points played${anyAhead ? " · Plan = on lines not played yet · All = both" : ""} · O / D = points started on offense / defense · G = goals · A = assists. Tap a column to sort.</p>` : `<p class="empty-note">Stats appear once a point has a result or a line has players. Tap "We scored" or "They scored" on a point.</p>`}
       </div>${below}`;
   }
 
