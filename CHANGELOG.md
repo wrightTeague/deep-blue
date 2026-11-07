@@ -2,6 +2,11 @@
 
 What changed, in plain words, newest first. **Real board** is the one the team uses. **Test board** is the separate copy at `/test/` for trying things before they go live; nothing there touches the real board.
 
+## Nov 7, 2026
+
+**Real board and test board**
+- **"1 captain per line" is now 1–2.** In Fill lines (and the playing-time simulator), the 1 button now reads **1–2**: every line still gets at least one captain or president, and a second one can go out when they've rested as long as everyone else, but it's never forced. Before, 1 meant exactly one, so captains sat a lot more than everyone else.
+
 ## Nov 1, 2026
 
 **Real board**

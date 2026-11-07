@@ -63,6 +63,9 @@
   function planLine(o) {
     const ratio = o.ratio || { W: 3, M: 4 };
     const wantLeaders = o.leaders == null ? 2 : o.leaders;
+    // "1" captain per line means at least 1, at most 2: a second one can go out when they're
+    // as rested as everyone else (or needed for a zone spot), but it's never forced.
+    const maxLeaders = wantLeaders === 1 ? 2 : wantLeaders;
     const deep = o.deep || new Set(), rookies = o.rookies || new Set();
     const apart = toPairs(o.apart), together = toPairs(o.together);
     const rest = restBefore(o.lines, o.idx, o.prevLines);
@@ -109,11 +112,11 @@
       // Keep-together partners come along if they fit.
       partnersOf(together, p.id).forEach(id => { const q = byId.get(id); if (q && q.active !== false && line.length < SLOTS && fits(q, true)) line.push({ p: q.id, r: isLeader(q) ? "H" : "" }); });
     }
-    function fill(pool, howMany, role, modes) {
+    function fill(pool, howMany, role, modes, ok) {
       for (const strict of modes || [true, false]) {
         for (const p of order(pool)) {
           if (howMany() <= 0 || line.length >= SLOTS) return;
-          if (fits(p, strict)) add(p, role);
+          if (fits(p, strict) && (!ok || ok(p))) add(p, typeof role === "function" ? role(p) : role);
         }
       }
     }
@@ -205,7 +208,7 @@
       const main = active.filter(p => pos[k].main && pos[k].main.has(p.id)), ok = active.filter(p => pos[k].ok && pos[k].ok.has(p.id));
       // Main list rested, then backups rested; a third captain only if no one else rested
       // fits; then the same again allowing back to back.
-      const spare = p => !wantLeaders || !isLeader(p) || count(isLeader) < wantLeaders;   // 0 captains per line: they're like anyone else
+      const spare = p => !wantLeaders || !isLeader(p) || count(isLeader) < maxLeaders;   // 0 captains per line: they're like anyone else
       for (const strict of [true, false]) {
         for (const pool of [main, ok]) if (missing() > 0) fill(pool.filter(spare), missing, "", [strict]);
         for (const pool of [main, ok]) if (missing() > 0) fill(pool, missing, "", [strict]);
@@ -219,7 +222,9 @@
     }
     // 3. Everyone else by rest. Leaders only if nobody else fits, so they stay near 1 line in 3.
     // With 0 captains per line set aside, captains are just players.
+    // With 1 per line, a second captain can come in here by rest like anyone else.
     if (!wantLeaders) fill(active, () => SLOTS - line.length, "");
+    else if (maxLeaders > wantLeaders) { fill(active, () => SLOTS - line.length, p => (isLeader(p) ? "H" : ""), undefined, p => !isLeader(p) || count(isLeader) < maxLeaders); fill(leaderPool, () => SLOTS - line.length, "H"); }
     else { fill(active.filter(p => !isLeader(p)), () => SLOTS - line.length, ""); fill(leaderPool, () => SLOTS - line.length, "H"); }
 
     // Roles: when there's a Handlers list, its picks get H (up to 3) and everyone else C.

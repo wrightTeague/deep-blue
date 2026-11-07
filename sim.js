@@ -232,7 +232,7 @@
     return `<section class="card setup setup-${side}" aria-label="Setup ${side}">
       <div class="setup-h"><span class="ab ab-${side}">${side}</span><span class="t"><b>${side === "A" ? "Fill lines now" : "Try"}</b><small>${sub}</small></span></div>
       <div class="plays-row"><span class="grow">Each new line plays</span>${seg("plays", [[1, "1"], [2, "2"], [3, "3"]], "disp")}</div>
-      <div class="plays-row"><span class="grow">Captains per line</span>${seg("caps", [[0, "0"], [1, "1"], [2, "2"], [3, "3"]], "disp")}</div>
+      <div class="plays-row"><span class="grow">Captains per line</span>${seg("caps", [[0, "0"], [1, "1–2"], [2, "2"], [3, "3"]], "disp")}</div>
       <div class="fill-pair"><span>Ratio</span>${seg("ratio", [["34", "3 W · 4 M"], ["25", "2 W · 5 M"], ["43", "4 W · 3 M"]], "wide")}
         ${st.ratio === "34" ? `<label class="fill-check"><input type="checkbox" data-act="set-check" data-side="${side}" data-k="ask" ${st.ask ? "checked" : ""}><span>Offer a 2 W · 5 M line when the men fall a point behind<small>The simulator always says yes.</small></span></label>` : ""}</div>
       ${st.caps >= 2 ? `<div class="fill-pair"><span>Captain pairs</span>${seg("pairing", [["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]], "wide")}</div>` : ""}

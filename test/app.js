@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.50"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.51"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -1141,7 +1141,7 @@
         <div class="fill-pair"><span>Add new lines <span class="muted" style="font-weight:400">· ${mk}</span></span>
           <div class="circles" role="group" aria-label="New lines">${[0, 1, 2, 3, 4, 6].map(v => `<button data-act="fill-n" data-v="${v}" aria-pressed="${s.n === v}">${v}</button>`).join("")}</div></div>
         <div class="plays-row"><span class="grow">Each plays</span><div class="seg inset disp" role="group" aria-label="Points per new line">${[1, 2, 3].map(v => `<button data-act="fill-plays" data-v="${v}" aria-pressed="${s.plays === v}">${v}</button>`).join("")}</div><span class="muted">point${s.plays === 1 ? "" : "s"}</span></div>
-        <div class="plays-row"><span class="grow">Captains per line</span><div class="seg inset disp" role="group" aria-label="Captains or president per line">${[0, 1, 2, 3].map(v => `<button data-act="fill-caps" data-v="${v}" aria-pressed="${ui.fillCaps === v}">${v}</button>`).join("")}</div></div>
+        <div class="plays-row"><span class="grow">Captains per line</span><div class="seg inset disp" role="group" aria-label="Captains or president per line">${[0, 1, 2, 3].map(v => `<button data-act="fill-caps" data-v="${v}" aria-pressed="${ui.fillCaps === v}">${v === 1 ? "1–2" : v}</button>`).join("")}</div></div>
         <div class="fill-pair"><span>Ratio</span>
           <div class="seg inset wide" role="group" aria-label="Women and men per line">${[["34", "3 W · 4 M"], ["25", "2 W · 5 M"], ["43", "4 W · 3 M"]].map(([v, t]) => `<button data-act="fill-ratio" data-v="${v}" aria-pressed="${ui.fillRatio === v}">${t}</button>`).join("")}</div>
           ${ui.fillRatio === "34" ? `<label class="fill-check" style="margin-top:6px"><input type="checkbox" id="fillAsk" ${ui.fillAsk ? "checked" : ""}><span>Offer a 2 W · 5 M line when the men fall a point behind over the day</span></label>` : ""}</div>
@@ -1156,7 +1156,7 @@
           <p class="fill-pair-note">${ui.lateMode === "less" ? "They go out after everyone's first shift and play a couple fewer points over the day." : "They go out after everyone's first shift, then rotate like everyone else."} ${[...late].map(id => esc(label(P(id)))).join(", ")}.</p></div>` : ""}
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules"><li class="eyebrow" style="display:block">Every line gets</li>
-          <li>${ui.fillCaps ? `${ui.fillCaps === 1 ? "1 captain" : ui.fillCaps + " captains"} or president, whoever has rested longest goes first` : "Captains and president rotate like everyone else"}</li>
+          <li>${ui.fillCaps === 1 ? "At least 1 captain or president, and a second when they're as rested as everyone else" : ui.fillCaps ? `${ui.fillCaps} captains or president, whoever has rested longest goes first` : "Captains and president rotate like everyone else"}</li>
           <li>${ui.fillRatio === "25" ? "2 women and 5 men" : ui.fillRatio === "43" ? "4 women and 3 men" : `3 women and 4 men${ui.fillAsk ? " (asks first if the men fall a point behind over the day)" : ""}`}</li>
           <li>${zoneSet ? "2 handlers, a deep deep and a short deep, from Zone spots" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back; people who are out are skipped</li>
