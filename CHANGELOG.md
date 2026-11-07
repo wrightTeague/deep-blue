@@ -4,6 +4,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 
 ## Nov 7, 2026
 
+**Test board**
+- **2 W · 5 M lines are spread out.** When the men fall a point behind and Fill lines offers a 2 W · 5 M line, it now waits until at least two regular lines have gone by since the last one (counting earlier games that day), so they come every few lines instead of back to back. Over a day, women and men end up just as even as before.
+
 **Real board and test board**
 - **"1 captain per line" is now 1–2.** In Fill lines (and the playing-time simulator), the 1 button now reads **1–2**: every line still gets at least one captain or president, and a second one can go out when they've rested as long as everyone else, but it's never forced. Before, 1 meant exactly one, so captains sat a lot more than everyone else.
 

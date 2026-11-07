@@ -278,14 +278,20 @@
   // day (o.dayLines, a list of each game's lines; only points with a result count) plus this
   // game's lines before idx (as planned). A point or more behind → offer a 5:2 line.
   // Returns { behind, w, m } with w and m the average points played today.
-  const GAP = 1;
+  // Spacing: no 5:2 line within SPREAD lines of the last one (earlier games today included), so
+  // they come at a steady interval instead of in clumps. The gap waits and they catch up later.
+  const GAP = 1, SPREAD = 3;
   function menBehind(o) {
+    const g = new Map(o.players.map(p => [p.id, p.gender]));
+    const isFive = l => { const ids = (l && l.lineup || []).map(s => g.get(s.p)); return ids.filter(x => x === "W").length === 2 && ids.filter(x => x === "M").length >= 5; };
+    const recent = [...(o.dayLines || []).flat(), ...o.lines.slice(0, o.idx)].slice(-((o.spread == null ? SPREAD : o.spread) - 1));
+    const spaced = recent.length > 0 && recent.some(isFive);
     const pts = new Map(), add = (lu, n) => (lu || []).forEach(s => pts.set(s.p, (pts.get(s.p) || 0) + n));
     (o.dayLines || []).forEach(game => (game || []).forEach(l => add(l.lineup, resultsOf(l))));
     for (let i = 0; i < o.idx; i++) add(o.lines[i].lineup, playsOf(o.lines[i]));
     const avg = g => { const ps = o.players.filter(p => p.active !== false && !isLeader(p) && p.gender === g); return ps.length ? ps.reduce((a, p) => a + (pts.get(p.id) || 0), 0) / ps.length : 0; };
     const w = avg("W"), m = avg("M"), gap = o.gap == null ? GAP : o.gap;
-    return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
+    return { behind: !spaced && (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
   /* Playing-time simulator: run the line maker over one whole tournament day. Nothing is saved.
