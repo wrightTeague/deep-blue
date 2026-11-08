@@ -278,14 +278,21 @@
   // day (o.dayLines, a list of each game's lines; only points with a result count) plus this
   // game's lines before idx (as planned). A point or more behind → offer a 5:2 line.
   // Returns { behind, w, m } with w and m the average points played today.
-  const GAP = 1;
+  // Spacing, so 5:2 lines come at a steady interval instead of in clumps (tuned over a few
+  // hundred simulated tournaments): normally at least 2 regular lines since the last one
+  // (earlier games today count); once the men are 1.5 points behind, 1; at 2 behind, none.
+  const GAP = 1, SPACING = [[2, 0], [1.5, 1], [-Infinity, 2]];
   function menBehind(o) {
+    const g = new Map(o.players.map(p => [p.id, p.gender]));
+    const isFive = l => { const gs = ((l && l.lineup) || []).map(s => g.get(s.p)); return gs.filter(x => x === "W").length === 2 && gs.filter(x => x === "M").length >= 5; };
     const pts = new Map(), add = (lu, n) => (lu || []).forEach(s => pts.set(s.p, (pts.get(s.p) || 0) + n));
     (o.dayLines || []).forEach(game => (game || []).forEach(l => add(l.lineup, resultsOf(l))));
     for (let i = 0; i < o.idx; i++) add(o.lines[i].lineup, playsOf(o.lines[i]));
     const avg = g => { const ps = o.players.filter(p => p.active !== false && !isLeader(p) && p.gender === g); return ps.length ? ps.reduce((a, p) => a + (pts.get(p.id) || 0), 0) / ps.length : 0; };
     const w = avg("W"), m = avg("M"), gap = o.gap == null ? GAP : o.gap;
-    return { behind: (w > 0 || m > 0) && w - m >= gap, w, m };
+    const look = SPACING.find(([d]) => w - m >= d)[1];
+    const tooSoon = look > 0 && [...(o.dayLines || []).flat(), ...o.lines.slice(0, o.idx)].slice(-look).some(isFive);
+    return { behind: !tooSoon && (w > 0 || m > 0) && w - m >= gap, w, m };
   }
 
   /* Playing-time simulator: run the line maker over one whole tournament day. Nothing is saved.
