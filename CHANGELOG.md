@@ -5,6 +5,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Nov 8, 2026
 
 **Real board and test board**
+- **Version on phones.** The board's version number now shows at the very bottom of Roster, so you can check you're up to date on a phone (laptops still show it in the header too).
+
+**Real board and test board**
 - **Tidier "Today" on Home.** On a tournament day, Home now shows **Today** with the tournament's name underneath, instead of squeezing a small "it's" and the name beside it.
 
 **Real board and test board**
