@@ -5,6 +5,9 @@ What changed, in plain words, newest first. **Real board** is the one the team u
 ## Nov 8, 2026
 
 **Real board and test board**
+- **Tidier "Today" on Home.** On a tournament day, Home now shows **Today** with the tournament's name underneath, instead of squeezing a small "it's" and the name beside it.
+
+**Real board and test board**
 - **2 W · 5 M lines now come every few lines on their own.** Before, Fill lines only offered one once the men had sat a full point longer than the women, which sometimes never happened. Now, with 3 W · 4 M and the box checked, it makes every few lines 2 W · 5 M without asking. How often depends on who's going and how many captains go on each line (usually every 4–5 lines); earlier games that day count. It skips one if the women have fallen behind and comes a bit early if the men are well behind. Uncheck the box to turn it off.
 
 ## Nov 7, 2026

@@ -7,7 +7,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "test.54"; // keep in sync with test/version.json and the ?v= in test/index.html
+  const APP_VERSION = "test.55"; // keep in sync with test/version.json and the ?v= in test/index.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -824,7 +824,7 @@
       const late = (Array.isArray(next.late) ? next.late : []).filter(id => P(id)).length, games = S.games.filter(g => g.tournament_id === next.id).length, d = daysUntil(next.start_date);
       hero = `<section class="home-next">
         <span class="eyebrow">Next up</span>
-        <div class="countdown">${d === 0 ? `<span class="big word">Today</span><span class="to"><span>it's</span><b>${esc(next.name)}</b></span>` : `<span class="big">${d}</span><span class="to"><span>day${d === 1 ? "" : "s"} to</span><b>${esc(next.name)}</b></span>`}</div>
+        <div class="countdown${d === 0 ? " is-today" : ""}">${d === 0 ? `<span class="big word">Today</span><span class="to"><b>${esc(next.name)}</b></span>` : `<span class="big">${d}</span><span class="to"><span>day${d === 1 ? "" : "s"} to</span><b>${esc(next.name)}</b></span>`}</div>
         <span>${fmtDay(next.start_date)}${next.location ? ` · at ${esc(next.location)}` : ""}</span>
         <div class="two-btns">${games ? `<button class="btn primary" data-act="home-tour" data-id="${next.id}">Open its games</button>` : `<button class="btn primary" data-act="tour-add-game" data-id="${next.id}">Plan the first game</button>`}<button class="btn" data-act="home-late" data-id="${next.id}">Who's going · ${goingCount(next).n}</button></div>
         <span class="page-sub">${att.n ? `${plural(att.n, "practice")} ${sinceText(att)} ${att.n === 1 ? "counts" : "count"} toward who starts.` : `No practices checked in ${sinceText(att)} yet.`}</span>
