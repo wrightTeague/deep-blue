@@ -278,21 +278,46 @@
   // day (o.dayLines, a list of each game's lines; only points with a result count) plus this
   // game's lines before idx (as planned). A point or more behind → offer a 5:2 line.
   // Returns { behind, w, m } with w and m the average points played today.
-  // Spacing, so 5:2 lines come at a steady interval instead of in clumps (tuned over a few
-  // hundred simulated tournaments): normally at least 2 regular lines since the last one
-  // (earlier games today count); once the men are 1.5 points behind, 1; at 2 behind, none.
-  const GAP = 1, SPACING = [[2, 0], [1.5, 1], [-Infinity, 2]];
+  // 2 W / 5 M lines at a steady interval. The interval comes from who's going: with mostly male
+  // captains on 3:4 lines, the other men get fewer spots than the other women, and a 5:2 line
+  // every N lines evens that out (N from today's regular lines so far, or from the roster and
+  // captains-per-line setting before there are any). Earlier games today count. It skips one
+  // if the women have fallen behind and comes early if the men are well behind.
+  // Tuned over a few hundred simulated tournaments.
+  const GAP = 1, K = 1, SKIP_IF_WOMEN_BEHIND = 0.5, CATCH_UP = 1.5;
   function menBehind(o) {
-    const g = new Map(o.players.map(p => [p.id, p.gender]));
-    const isFive = l => { const gs = ((l && l.lineup) || []).map(s => g.get(s.p)); return gs.filter(x => x === "W").length === 2 && gs.filter(x => x === "M").length >= 5; };
+    const pl = new Map(o.players.map(p => [p.id, p]));
+    const gOf = id => (pl.get(id) || {}).gender;
+    const isFive = l => { const gs = ((l && l.lineup) || []).map(s => gOf(s.p)); return gs.filter(x => x === "W").length === 2 && gs.filter(x => x === "M").length >= 5; };
     const pts = new Map(), add = (lu, n) => (lu || []).forEach(s => pts.set(s.p, (pts.get(s.p) || 0) + n));
     (o.dayLines || []).forEach(game => (game || []).forEach(l => add(l.lineup, resultsOf(l))));
     for (let i = 0; i < o.idx; i++) add(o.lines[i].lineup, playsOf(o.lines[i]));
-    const avg = g => { const ps = o.players.filter(p => p.active !== false && !isLeader(p) && p.gender === g); return ps.length ? ps.reduce((a, p) => a + (pts.get(p.id) || 0), 0) / ps.length : 0; };
-    const w = avg("W"), m = avg("M"), gap = o.gap == null ? GAP : o.gap;
-    const look = SPACING.find(([d]) => w - m >= d)[1];
-    const tooSoon = look > 0 && [...(o.dayLines || []).flat(), ...o.lines.slice(0, o.idx)].slice(-look).some(isFive);
-    return { behind: !tooSoon && (w > 0 || m > 0) && w - m >= gap, w, m };
+    const going = o.players.filter(p => p.active !== false);
+    const others = g => going.filter(p => !isLeader(p) && p.gender === g);
+    const avg = g => { const ps = others(g); return ps.length ? ps.reduce((a, p) => a + (pts.get(p.id) || 0), 0) / ps.length : 0; };
+    const w = avg("W"), m = avg("M");
+    // How often a 5:2 line is needed: per regular line, a = other women on it, b = other men.
+    const nw = others("W").length, nm = others("M").length;
+    const all = [...(o.dayLines || []).flat(), ...o.lines.slice(0, o.idx)].filter(l => l && l.lineup && l.lineup.length);
+    const reg = all.filter(l => !isFive(l));
+    let a, b;
+    if (reg.length) {
+      a = 0; b = 0;
+      reg.forEach(l => l.lineup.forEach(s => { const p = pl.get(s.p); if (p && !isLeader(p)) { if (p.gender === "W") a++; else if (p.gender === "M") b++; } }));
+      a /= reg.length; b /= reg.length;
+    } else {
+      const lw = going.filter(p => isLeader(p) && p.gender === "W").length, lm = going.filter(p => isLeader(p) && p.gender === "M").length;
+      const c = lw + lm ? Math.min(o.leaders == null ? 2 : o.leaders === 1 ? 1.5 : o.leaders, lw + lm) : 0;
+      a = 3 - (c * lw) / ((lw + lm) || 1); b = 4 - (c * lm) / ((lw + lm) || 1);
+    }
+    const f = nw && nm ? (nm * a - nw * b) / (nm + nw) : 0;
+    const every = f > 0.02 ? Math.max(2, Math.min(8, Math.round(K / f))) : Infinity;
+    let last = -1; all.forEach((l, i) => { if (isFive(l)) last = i; });
+    const since = all.length - last;   // 1 = the line right before this one was a 5:2
+    const gap = w - m;
+    const behind = nw > 0 && nm > 0 && gap > -SKIP_IF_WOMEN_BEHIND &&
+      (since >= every || (gap >= CATCH_UP && since >= 2) || gap >= CATCH_UP + 0.5);
+    return { behind, w, m, every };
   }
 
   /* Playing-time simulator: run the line maker over one whole tournament day. Nothing is saved.
@@ -338,7 +363,7 @@
         const keep = l.lineup.map(s => s.p).filter(here);
         if (keep.length >= SLOTS) return;   // a full planned line: Fill lines leaves it alone
         let ratio = o.ratio || { W: 3, M: 4 };
-        if (o.five && menBehind({ players: o.players, lines, idx: i, dayLines }).behind) { ratio = { W: 2, M: 5 }; l.five = true; fives++; }
+        if (o.five && menBehind({ players: o.players, lines, idx: i, dayLines, leaders: o.leaders }).behind) { ratio = { W: 2, M: 5 }; l.five = true; fives++; }
         const r = planLine({ ...o, ratio, lines, idx: i, prevLines, dayLines, keep, keepRoles: Object.fromEntries(l.lineup.map(s => [s.p, s.r || ""])),
           seed: (g.id || "sim:" + gi) + ":" + i });
         l.lineup = r.lineup;

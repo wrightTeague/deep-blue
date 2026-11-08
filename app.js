@@ -6,7 +6,7 @@
 
   const SUPABASE_URL = "https://hqlvhzrafntwqsktxljl.supabase.co";
   const SUPABASE_KEY = "sb_publishable_RxdiFg2zzl4aYnH92hQ6-g_ZACvuXLc";
-  const APP_VERSION = "2026.11.07.2"; // keep in sync with version.json and the ?v= in index.html and sim.html
+  const APP_VERSION = "2026.11.08.1"; // keep in sync with version.json and the ?v= in index.html and sim.html
   const SLOTS = 7;
   const ROLES = ["", "H", "C"];
   const ROLE_NAME = { H: "Handle", C: "Cut" };
@@ -1131,7 +1131,7 @@
         <div class="plays-row"><span class="grow">Captains per line</span><div class="seg inset disp" role="group" aria-label="Captains or president per line">${[0, 1, 2, 3].map(v => `<button data-act="fill-caps" data-v="${v}" aria-pressed="${ui.fillCaps === v}">${v === 1 ? "1–2" : v}</button>`).join("")}</div></div>
         <div class="fill-pair"><span>Ratio</span>
           <div class="seg inset wide" role="group" aria-label="Women and men per line">${[["34", "3 W · 4 M"], ["25", "2 W · 5 M"], ["43", "4 W · 3 M"]].map(([v, t]) => `<button data-act="fill-ratio" data-v="${v}" aria-pressed="${ui.fillRatio === v}">${t}</button>`).join("")}</div>
-          ${ui.fillRatio === "34" ? `<label class="fill-check" style="margin-top:6px"><input type="checkbox" id="fillAsk" ${ui.fillAsk ? "checked" : ""}><span>Offer a 2 W · 5 M line when the men fall a point behind over the day</span></label>` : ""}</div>
+          ${ui.fillRatio === "34" ? `<label class="fill-check" style="margin-top:6px"><input type="checkbox" id="fillAsk" ${ui.fillAsk ? "checked" : ""}><span>Every few lines, make one 2 W · 5 M so the men keep up over the day</span></label>` : ""}</div>
         ${ui.fillCaps >= 2 ? `<div class="fill-pair"><span>Captain pairs</span>
           <div class="seg inset wide" role="group" aria-label="Captain pairs">${[["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]].map(([v, t]) => `<button data-act="fill-pairing" data-v="${v}" aria-pressed="${ui.pairing === v}">${t}</button>`).join("")}</div>
           <p class="fill-pair-note">${ui.pairing === "rotate" ? "Each captain goes out with whoever they've played with least today, so everyone plays with everyone."
@@ -1144,7 +1144,7 @@
         <label class="fill-check"><input type="checkbox" id="fillExisting" ${s.existing ? "checked" : ""}><span>Also fill empty spots in lines that haven't been played</span></label>
         <ul class="fill-rules"><li class="eyebrow" style="display:block">Every line gets</li>
           <li>${ui.fillCaps === 1 ? "At least 1 captain or president, and a second when they're as rested as everyone else" : ui.fillCaps ? `${ui.fillCaps} captains or president, whoever has rested longest goes first` : "Captains and president rotate like everyone else"}</li>
-          <li>${ui.fillRatio === "25" ? "2 women and 5 men" : ui.fillRatio === "43" ? "4 women and 3 men" : `3 women and 4 men${ui.fillAsk ? " (asks first if the men fall a point behind over the day)" : ""}`}</li>
+          <li>${ui.fillRatio === "25" ? "2 women and 5 men" : ui.fillRatio === "43" ? "4 women and 3 men" : `3 women and 4 men${ui.fillAsk ? ", with a 2 W · 5 M line every few lines (how often depends on who's going)" : ""}`}</li>
           <li>${zoneSet ? "2 handlers, a deep deep and a short deep, from Zone spots" : `<b>No zone spots set.</b> Add handlers, deep deeps and short deeps under Zone spots on the Roster tab.`}</li>
           <li>Nobody back to back; people who are out are skipped</li>
           <li>Players you've placed stay put. Lines with results aren't touched.</li>
@@ -1303,8 +1303,8 @@
     const going = S.players.filter(p => !away.has(p.id));
     for (const i of targets) {
       const base = ui.fillRatio === "25" ? { W: 2, M: 5 } : ui.fillRatio === "43" ? { W: 4, M: 3 } : { W: 3, M: 4 };
-      const mb = ui.fillRatio === "34" && ui.fillAsk ? DBLines.menBehind({ players: going, lines, idx: i, dayLines }) : { behind: false };
-      const ratio = mb.behind && (await askRatio(i + 1, mb)) === "five" ? { W: 2, M: 5 } : base;
+      const mb = ui.fillRatio === "34" && ui.fillAsk ? DBLines.menBehind({ players: going, lines, idx: i, dayLines, leaders: ui.fillCaps }) : { behind: false };
+      const ratio = mb.behind ? { W: 2, M: 5 } : base;
       const keep = (lines[i].lineup || []).map(s => s.p).filter(here), keepRoles = Object.fromEntries((lines[i].lineup || []).map(s => [s.p, s.r || ""]));
       const r = DBLines.planLine({
         players: going, lines, idx: i, prevLines, dayLines, keep, keepRoles, ratio, leaders: ui.fillCaps, pairing: ui.pairing, usualPairs,

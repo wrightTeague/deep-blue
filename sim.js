@@ -234,7 +234,7 @@
       <div class="plays-row"><span class="grow">Each new line plays</span>${seg("plays", [[1, "1"], [2, "2"], [3, "3"]], "disp")}</div>
       <div class="plays-row"><span class="grow">Captains per line</span>${seg("caps", [[0, "0"], [1, "1–2"], [2, "2"], [3, "3"]], "disp")}</div>
       <div class="fill-pair"><span>Ratio</span>${seg("ratio", [["34", "3 W · 4 M"], ["25", "2 W · 5 M"], ["43", "4 W · 3 M"]], "wide")}
-        ${st.ratio === "34" ? `<label class="fill-check"><input type="checkbox" data-act="set-check" data-side="${side}" data-k="ask" ${st.ask ? "checked" : ""}><span>Offer a 2 W · 5 M line when the men fall a point behind<small>The simulator always says yes.</small></span></label>` : ""}</div>
+        ${st.ratio === "34" ? `<label class="fill-check"><input type="checkbox" data-act="set-check" data-side="${side}" data-k="ask" ${st.ask ? "checked" : ""}><span>Every few lines, make one 2 W · 5 M so the men keep up over the day</span></label>` : ""}</div>
       ${st.caps >= 2 ? `<div class="fill-pair"><span>Captain pairs</span>${seg("pairing", [["rotate", "Rotate"], ["usual", "Mostly usual"], ["rest", "Same pairs"]], "wide")}</div>` : ""}
       <label class="fill-check"><input type="checkbox" data-act="set-check" data-side="${side}" data-k="useAtt" ${st.useAtt ? "checked" : ""}><span>Practice attendance counts<small>${att.n ? `${plural(att.n, "practice")} ${sinceText(att)}.` : `No practices checked in ${sinceText(att)}, so this does nothing yet.`}</small></span></label>
       ${who.nLate ? `<div class="fill-pair"><span>Late sign-ups (${who.nLate})</span>${seg("lateMode", [["start", "Start later"], ["less", "Start later + less time"]], "wide")}</div>` : ""}
